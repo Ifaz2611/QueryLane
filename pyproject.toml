@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "querylane"
+version = "0.16.0"
+description = "Cost-aware LLM query routing: zero-token specialists, local models, and cloud fallback."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "openai>=1.40,<3",
+]
+
+[project.optional-dependencies]
+local = ["llama-cpp-python"]
+specialists = ["numpy", "onnxruntime", "tokenizers"]
+dev = ["pytest", "ruff"]
+finetune = [
+    "transformers>=4.45",
+    "trl>=0.12",
+    "peft>=0.13",
+    "datasets",
+    "accelerate",
+    "sentencepiece",
+]
+
+[project.scripts]
+querylane = "agent.main:main"
+
+[tool.setuptools]
+packages = ["agent"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]

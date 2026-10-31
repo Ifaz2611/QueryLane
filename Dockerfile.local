@@ -1,0 +1,18 @@
+# Phase 2 test image: llama-cpp-python runtime, model mounted at run time for
+# fast iteration. The final submission image COPYs the weights instead.
+FROM python:3.11-slim
+LABEL org.opencontainers.image.title="QueryLane" \
+      org.opencontainers.image.description="Cost-aware LLM query routing (local runtime test image)"
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir llama-cpp-python \
+      --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+
+COPY agent/ ./agent/
+
+ENV LOCAL_CATEGORIES=""
+
+ENTRYPOINT ["python", "-m", "agent.main"]

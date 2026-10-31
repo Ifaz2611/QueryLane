@@ -1,0 +1,26 @@
+# Secrets: the harness injects real values at evaluation; never commit keys
+.env
+.env.*
+!.env.example
+
+# Model weights (multi-GB / >100MB; download commands are in the README)
+models/*.gguf
+models/**/*.onnx
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.venv/
+
+# Local test artifacts
+testio/output*/
+eval/results_*.json
+
+# Organizer-distributed documents
+source/

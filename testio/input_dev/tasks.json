@@ -1,0 +1,162 @@
+[
+ {
+  "task_id": "fact-01",
+  "prompt": "What is the capital of Japan, and on which island is it located?"
+ },
+ {
+  "task_id": "fact-02",
+  "prompt": "Explain in two sentences what photosynthesis is."
+ },
+ {
+  "task_id": "fact-03",
+  "prompt": "What does HTTP stand for and what is it used for?"
+ },
+ {
+  "task_id": "fact-04",
+  "prompt": "Who wrote the novel 1984 and in what year was it published?"
+ },
+ {
+  "task_id": "fact-05",
+  "prompt": "What is the boiling point of water at sea level, in both Celsius and Fahrenheit?"
+ },
+ {
+  "task_id": "math-01",
+  "prompt": "A store has 240 items. It sells 15% of them on Monday and 60 more on Tuesday. How many items remain?"
+ },
+ {
+  "task_id": "math-02",
+  "prompt": "A train travels 180 km in 2.5 hours. What is its average speed in km/h?"
+ },
+ {
+  "task_id": "math-03",
+  "prompt": "A shirt costs $40 after a 20% discount. What was the original price?"
+ },
+ {
+  "task_id": "math-04",
+  "prompt": "Tom saves $15 per week for 8 weeks, then spends $45 of his savings. How much money does he have left?"
+ },
+ {
+  "task_id": "math-05",
+  "prompt": "A recipe for 4 people needs 300 grams of flour. How much flour is needed for 10 people?"
+ },
+ {
+  "task_id": "sent-01",
+  "prompt": "Classify the sentiment of this review: The battery life is great, but the screen scratches too easily."
+ },
+ {
+  "task_id": "sent-02",
+  "prompt": "Classify the sentiment of this review: Absolutely love this blender, it crushes ice in seconds and cleanup is a breeze."
+ },
+ {
+  "task_id": "sent-03",
+  "prompt": "Classify the sentiment of this review: The package arrived three weeks late and the box was completely crushed."
+ },
+ {
+  "task_id": "sent-04",
+  "prompt": "Classify the sentiment of this review: It does what it says, nothing more, nothing less."
+ },
+ {
+  "task_id": "sent-05",
+  "prompt": "Classify the sentiment of this review: The hotel room was spotless and the staff were friendly, though the wifi kept dropping."
+ },
+ {
+  "task_id": "summ-01",
+  "prompt": "Summarize the following in exactly one sentence: The city council met on Tuesday to debate the new bicycle lane proposal. Supporters argued it would reduce traffic congestion and improve air quality. Opponents worried about the loss of parking spaces for local businesses. After three hours of discussion, the council voted 7 to 4 to approve a six-month pilot program on two downtown streets."
+ },
+ {
+  "task_id": "summ-02",
+  "prompt": "Summarize this in no more than 10 words: Researchers at the university developed a new battery chemistry that charges to 80 percent in five minutes while retaining 90 percent of its capacity after 2000 charge cycles, a result that could make electric vehicles far more practical for long trips."
+ },
+ {
+  "task_id": "summ-03",
+  "prompt": "Condense the following paragraph into two sentences: Remote work has reshaped office culture in lasting ways. Many companies now operate hybrid schedules, with employees commuting only two or three days a week. Downtown lunch spots and transit systems have adapted to lighter weekday traffic, while commercial landlords convert unused office floors into apartments. Economists note that mid-sized cities with affordable housing have gained residents as workers untether from headquarters."
+ },
+ {
+  "task_id": "summ-04",
+  "prompt": "Summarize the following in one sentence: Honeybees communicate the location of food sources through a behaviour known as the waggle dance. A returning forager waggles its body at an angle that encodes the direction of the food relative to the sun, while the duration of the waggle encodes the distance. Other bees follow the dance closely and then fly out to find the advertised flowers."
+ },
+ {
+  "task_id": "summ-05",
+  "prompt": "TL;DR in one line: Our quarterly report shows revenue grew 12 percent year over year, driven mostly by the subscription segment, while hardware sales declined 8 percent. Operating costs rose 5 percent due to new data-centre leases, leaving net margin roughly flat at 14 percent."
+ },
+ {
+  "task_id": "ner-01",
+  "prompt": "Extract all named entities and their types from: Maria Sanchez joined Fireworks AI in Berlin last March."
+ },
+ {
+  "task_id": "ner-02",
+  "prompt": "Extract all named entities and their types from: On 14 February 2020, Sarah Connor flew from Toronto to Zurich for a meeting with Nestle."
+ },
+ {
+  "task_id": "ner-03",
+  "prompt": "List the named entities and their types in this sentence: Apple announced the Vision Pro at WWDC in Cupertino while Tim Cook watched from the front row."
+ },
+ {
+  "task_id": "ner-04",
+  "prompt": "Extract the entities (person, organization, location, date) from: The Treaty of Versailles was signed in France in 1919, formally ending the war between Germany and the Allied Powers."
+ },
+ {
+  "task_id": "ner-05",
+  "prompt": "Identify all named entities and their types: Dr. Amina Yusuf of the World Health Organization presented the findings in Geneva on 3 June."
+ },
+ {
+  "task_id": "dbg-01",
+  "prompt": "This function should return the max of a list but has a bug: def get_max(nums): return nums[0]. Find and fix it."
+ },
+ {
+  "task_id": "dbg-02",
+  "prompt": "Find and fix the bug in this function: def is_even(n): return n % 2 == 1"
+ },
+ {
+  "task_id": "dbg-03",
+  "prompt": "This function should sum a list but crashes on empty lists: def total(xs): t = xs[0]; for x in xs[1:]: t += x; return t. Fix it."
+ },
+ {
+  "task_id": "dbg-04",
+  "prompt": "Debug this function that always returns 0: def count_vowels(s): count = 0; [count + 1 for ch in s if ch in 'aeiou']; return count"
+ },
+ {
+  "task_id": "dbg-05",
+  "prompt": "This recursive factorial never stops: def fact(n): return n * fact(n - 1). Find and fix it."
+ },
+ {
+  "task_id": "logic-01",
+  "prompt": "Three friends, Sam, Jo, and Lee, each own a different pet: cat, dog, bird. Sam does not own the bird. Jo owns the dog. Who owns the cat?"
+ },
+ {
+  "task_id": "logic-02",
+  "prompt": "Anna, Ben, and Carl finished a race in three different positions. Anna finished before Ben. Carl did not finish last. Ben did not finish second. Who finished last?"
+ },
+ {
+  "task_id": "logic-03",
+  "prompt": "Four cups are lined up in a row. The red cup is immediately to the left of the blue cup. The green cup is at the far right. The yellow cup is not next to the green cup. What is the order of the cups from left to right?"
+ },
+ {
+  "task_id": "logic-04",
+  "prompt": "Maya is taller than Nina but shorter than Omar. Petra is shorter than Nina. Who is the second tallest?"
+ },
+ {
+  "task_id": "logic-05",
+  "prompt": "Five people sit in a row of seats numbered 1 to 5 from the left. Dana sits in seat 3. Eli sits in seat 1. Fay sits immediately to the right of Dana. Gus does not sit next to Eli. In which seat does Hana sit?"
+ },
+ {
+  "task_id": "gen-01",
+  "prompt": "Write a Python function that returns the second-largest number in a list, handling duplicates correctly."
+ },
+ {
+  "task_id": "gen-02",
+  "prompt": "Write a Python function that checks whether a string is a palindrome, ignoring case and spaces."
+ },
+ {
+  "task_id": "gen-03",
+  "prompt": "Write a Python function fizzbuzz(n) that returns a list of strings for the numbers 1 to n, where multiples of 3 become 'Fizz', multiples of 5 become 'Buzz', and multiples of both become 'FizzBuzz'."
+ },
+ {
+  "task_id": "gen-04",
+  "prompt": "Write a Python function that merges two already-sorted lists into one sorted list without using sort() or sorted()."
+ },
+ {
+  "task_id": "gen-05",
+  "prompt": "Write a Python function that counts the frequency of each word in a sentence and returns a dictionary, treating words case-insensitively."
+ }
+]

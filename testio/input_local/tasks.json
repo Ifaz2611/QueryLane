@@ -1,0 +1,62 @@
+[
+ {
+  "task_id": "sent-01",
+  "prompt": "Classify the sentiment of this review: The battery life is great, but the screen scratches too easily."
+ },
+ {
+  "task_id": "sent-02",
+  "prompt": "Classify the sentiment of this review: Absolutely love this blender, it crushes ice in seconds and cleanup is a breeze."
+ },
+ {
+  "task_id": "sent-03",
+  "prompt": "Classify the sentiment of this review: The package arrived three weeks late and the box was completely crushed."
+ },
+ {
+  "task_id": "sent-04",
+  "prompt": "Classify the sentiment of this review: It does what it says, nothing more, nothing less."
+ },
+ {
+  "task_id": "sent-05",
+  "prompt": "Classify the sentiment of this review: The hotel room was spotless and the staff were friendly, though the wifi kept dropping."
+ },
+ {
+  "task_id": "summ-01",
+  "prompt": "Summarize the following in exactly one sentence: The city council met on Tuesday to debate the new bicycle lane proposal. Supporters argued it would reduce traffic congestion and improve air quality. Opponents worried about the loss of parking spaces for local businesses. After three hours of discussion, the council voted 7 to 4 to approve a six-month pilot program on two downtown streets."
+ },
+ {
+  "task_id": "summ-02",
+  "prompt": "Summarize this in no more than 10 words: Researchers at the university developed a new battery chemistry that charges to 80 percent in five minutes while retaining 90 percent of its capacity after 2000 charge cycles, a result that could make electric vehicles far more practical for long trips."
+ },
+ {
+  "task_id": "summ-03",
+  "prompt": "Condense the following paragraph into two sentences: Remote work has reshaped office culture in lasting ways. Many companies now operate hybrid schedules, with employees commuting only two or three days a week. Downtown lunch spots and transit systems have adapted to lighter weekday traffic, while commercial landlords convert unused office floors into apartments. Economists note that mid-sized cities with affordable housing have gained residents as workers untether from headquarters."
+ },
+ {
+  "task_id": "summ-04",
+  "prompt": "Summarize the following in one sentence: Honeybees communicate the location of food sources through a behaviour known as the waggle dance. A returning forager waggles its body at an angle that encodes the direction of the food relative to the sun, while the duration of the waggle encodes the distance. Other bees follow the dance closely and then fly out to find the advertised flowers."
+ },
+ {
+  "task_id": "summ-05",
+  "prompt": "TL;DR in one line: Our quarterly report shows revenue grew 12 percent year over year, driven mostly by the subscription segment, while hardware sales declined 8 percent. Operating costs rose 5 percent due to new data-centre leases, leaving net margin roughly flat at 14 percent."
+ },
+ {
+  "task_id": "ner-01",
+  "prompt": "Extract all named entities and their types from: Maria Sanchez joined Fireworks AI in Berlin last March."
+ },
+ {
+  "task_id": "ner-02",
+  "prompt": "Extract all named entities and their types from: On 14 February 2020, Sarah Connor flew from Toronto to Zurich for a meeting with Nestle."
+ },
+ {
+  "task_id": "ner-03",
+  "prompt": "List the named entities and their types in this sentence: Apple announced the Vision Pro at WWDC in Cupertino while Tim Cook watched from the front row."
+ },
+ {
+  "task_id": "ner-04",
+  "prompt": "Extract the entities (person, organization, location, date) from: The Treaty of Versailles was signed in France in 1919, formally ending the war between Germany and the Allied Powers."
+ },
+ {
+  "task_id": "ner-05",
+  "prompt": "Identify all named entities and their types: Dr. Amina Yusuf of the World Health Organization presented the findings in Geneva on 3 June."
+ }
+]

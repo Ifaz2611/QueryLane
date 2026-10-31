@@ -1,0 +1,22 @@
+# Hybrid submission image: local model for proven categories, cloud for the rest.
+# The heavy weights layer sits BEFORE the code layer so code edits never
+# invalidate it (pushes after the first only upload the small code layer).
+FROM python:3.11-slim
+LABEL org.opencontainers.image.title="QueryLane" \
+      org.opencontainers.image.description="Cost-aware LLM query routing (hybrid phase 2 image)"
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir llama-cpp-python \
+      --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+
+COPY models/qwen2.5-3b-instruct-q4_k_m.gguf ./models/model.gguf
+
+COPY agent/ ./agent/
+
+ENV LOCAL_CATEGORIES="sentiment,ner,math"
+ENV LOCAL_MODEL_PATH="/app/models/model.gguf"
+
+ENTRYPOINT ["python", "-m", "agent.main"]

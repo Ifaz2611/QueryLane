@@ -1,0 +1,5 @@
+# Runtime core for the cloud-only image.
+openai>=1.40,<3
+
+# Optional local specialists: numpy, onnxruntime, tokenizers
+# Optional local GGUF: llama-cpp-python (see Dockerfile.v* and README.md)

@@ -1,0 +1,25 @@
+# v14: v13 plus NER served by the fine-tuned 1.5B behind a zero-token
+# completeness guard. Logic stays cloud: the fine-tune scored 0/5 on deduction.
+FROM python:3.11-slim
+LABEL org.opencontainers.image.title="QueryLane" \
+      org.opencontainers.image.description="Cost-aware LLM query routing (v14 guarded-NER image)"
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir llama-cpp-python \
+      --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu && \
+    pip install --no-cache-dir onnxruntime tokenizers numpy
+
+COPY models/ft-1.5b-q4_k_m.gguf ./models/model.gguf
+COPY models/ner/ ./models/ner/
+COPY models/sst2/ ./models/sst2/
+
+COPY agent/ ./agent/
+
+ENV LOCAL_CATEGORIES="factual,math,ner"
+ENV LOCAL_MODEL_PATH="/app/models/model.gguf"
+ENV LOCAL_MIN_TPS="1.2"
+
+ENTRYPOINT ["python", "-m", "agent.main"]
