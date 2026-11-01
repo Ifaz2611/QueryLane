@@ -24,3 +24,7 @@ eval/results_*.json
 
 # Organizer-distributed documents
 source/
+
+# Local agent guide (per-user AI instructions, never commit)
+agent.md
+AGENT.md

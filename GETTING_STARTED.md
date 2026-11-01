@@ -40,7 +40,7 @@ Ensure you have the following installed:
 If you haven't already:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Ifaz2611/QueryLane
 cd QueryLane
 ```
 
