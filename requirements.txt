@@ -1,5 +1,24 @@
-# Runtime core for the cloud-only image.
+# Core dependencies (cloud-only)
 openai>=1.40,<3
 
-# Optional local specialists: numpy, onnxruntime, tokenizers
-# Optional local GGUF: llama-cpp-python (see Dockerfile.v* and README.md)
+# Local GGUF support (install with: pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu)
+# llama-cpp-python
+
+# ONNX specialists
+numpy
+onnxruntime
+tokenizers
+
+# Development dependencies
+pytest
+pytest-cov
+ruff
+pre-commit
+
+# Fine-tuning dependencies
+transformers>=4.45
+trl>=0.12
+peft>=0.13
+datasets
+accelerate
+sentencepiece
