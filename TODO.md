@@ -16,14 +16,14 @@ the rest are future work.
 - [x] Validate that the input batch is a JSON array of task objects.
 - [x] Add a starter test suite for the router, PAL, instruction stripping,
       specialist gates, data validation, and the main loop (`tests/`, 24 tests).
-- [ ] Extend coverage to the cloud client, local calibration, and deadline
+- [x] Extend coverage to the cloud client, local calibration, and deadline
       handling, and wire the suite into CI.
-- [ ] Fuzz `pal.safe_eval` with adversarial model output and add regression
+- [x] Fuzz `pal.safe_eval` with adversarial model output and add regression
       cases for every rejected construct.
-- [ ] Decide on a license and add `LICENSE` before publishing.
-- [ ] Add a secret-scanning pre-commit hook and CI check (never commit `.env`).
-- [ ] Run the container as a non-root user and pin base-image digests.
-- [ ] Add dependency pinning/lockfile for reproducible images.
+- [x] Decide on a license and add `LICENSE` before publishing.
+- [x] Add a secret-scanning pre-commit hook and CI check (never commit `.env`).
+- [x] Run the container as a non-root user and pin base-image digests.
+- [x] Add dependency pinning/lockfile for reproducible images.
 
 ## P1 — routing and accuracy
 
@@ -106,7 +106,7 @@ the rest are future work.
       wheel/sdist in CI.
 - [ ] Add a small logo/wordmark and a docs page with the lane diagram.
 - [ ] Add a `Makefile` or `justfile` for common tasks (test, lint, eval, build).
-- [ ] Add `ruff`/`pytest` to CI and a pre-commit configuration.
+- [x] Add `ruff`/`pytest` to CI and a pre-commit configuration.
 - [ ] Add a `CHANGELOG.md` and semantic version tags.
 - [ ] Provide a model download script with checksums for the ONNX and GGUF
       artifacts instead of documenting manual placement.

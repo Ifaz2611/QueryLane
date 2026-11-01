@@ -41,9 +41,10 @@ Be respectful, constructive, and inclusive. We aim to maintain a welcoming envir
    .venv\Scripts\activate  # Windows
    ```
 
-4. Install development dependencies:
+4. Install development dependencies and enable the commit hooks:
    ```bash
    pip install -e ".[dev,specialists]"
+   pre-commit install
    ```
 
 5. Copy `.env.example` to `.env` and add your API credentials:
@@ -166,13 +167,16 @@ pytest
 pytest -v
 
 # Run specific test file
-pytest tests/test_router.py
+pytest tests/test_core.py -v
 
-# Run specific test
-pytest tests/test_router.py::test_classify_prompt
+# Run a specific test
+pytest tests/test_pal_fuzz.py::PalFuzzTests
 
 # Run with coverage
 pytest --cov=agent
+
+# Run just the credential/secret gate
+python scripts/check_secrets.py --all
 ```
 
 ### Writing Tests
@@ -194,18 +198,18 @@ def test_classify_sentiment_prompt():
 
 ### Test Coverage
 
-Aim for high test coverage on new code. Current test suite covers:
+Aim for high test coverage on new code. The suite is wired into CI through
+`.github/workflows/ci.yml`. Current coverage includes:
 - Router classification logic
-- PAL safe evaluation
+- PAL safe evaluation, including a deterministic adversarial fuzz suite
 - Instruction stripping
 - Specialist gates
 - Data validation
 - Main loop
-
-Areas needing coverage (from TODO.md):
-- Cloud client
-- Local calibration
-- Deadline handling
+- Cloud client retries, model fallback, and malformed responses
+- Local calibration and per-category speed gates
+- Global deadline handling and lane fallbacks
+- The secret-scanning pre-commit/CI hook
 
 ## Documentation
 
@@ -280,12 +284,8 @@ Based on [`TODO.md`](TODO.md), here are key areas where contributions are welcom
 
 ### High Priority (P0)
 
-- Extend test coverage to cloud client, local calibration, and deadline handling
-- Add fuzz testing for `pal.safe_eval` with adversarial model output
-- Add a license file
-- Add secret-scanning pre-commit hook
-- Run container as non-root user
-- Add dependency pinning/lockfile
+The initial P0 security/correctness items are complete. See [`TODO.md`](TODO.md)
+for the current list.
 
 ### Medium Priority (P1)
 
@@ -326,7 +326,6 @@ Based on [`TODO.md`](TODO.md), here are key areas where contributions are welcom
 - Add logo/wordmark
 - Add docs page with lane diagram
 - Add Makefile or justfile for common tasks
-- Add CI with ruff/pytest
 - Add CHANGELOG.md and semantic versioning
 - Provide model download script with checksums
 - Add multi-arch Docker builds
@@ -361,6 +360,7 @@ Contributors will be acknowledged in the project. Major contributions may be hig
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the project's license (to be determined).
+By contributing, you agree that your contributions will be licensed under the
+project's [MIT License](LICENSE).
 
 Thank you for contributing to QueryLane! 

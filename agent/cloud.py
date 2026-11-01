@@ -175,17 +175,27 @@ class CloudClient:
             extra_body=extra,
         )
         usage = getattr(response, "usage", None)
+        # Some OpenAI-compatible proxies omit fields or return a partial usage
+        # object; never let accounting turn a good answer into a failed task.
+        total_tokens = getattr(usage, "total_tokens", 0) if usage is not None else 0
+        prompt_tokens = getattr(usage, "prompt_tokens", 0) if usage is not None else 0
+        completion_tokens = (
+            getattr(usage, "completion_tokens", 0) if usage is not None else 0
+        )
         with self._lock:
             self._calls += 1
-            if usage is not None and usage.total_tokens:
-                self._total_tokens += usage.total_tokens
+            if isinstance(total_tokens, int) and not isinstance(total_tokens, bool):
+                if total_tokens > 0:
+                    self._total_tokens += total_tokens
         if os.environ.get("AGENT_DEBUG") and usage is not None:
             print(
-                f"    call model={model} prompt={usage.prompt_tokens} "
-                f"completion={usage.completion_tokens} total={usage.total_tokens}",
+                f"    call model={model} prompt={prompt_tokens} "
+                f"completion={completion_tokens} total={total_tokens}",
                 flush=True,
             )
-        if not response.choices:
+        choices = getattr(response, "choices", None) or []
+        if not choices:
             return ""
-        content = response.choices[0].message.content or ""
+        message = getattr(choices[0], "message", None)
+        content = getattr(message, "content", None) or ""
         return _strip_thinking(content)

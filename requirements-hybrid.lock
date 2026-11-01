@@ -1,0 +1,104 @@
+# Fully pinned lock for the hybrid (GGUF + ONNX) images.
+# Regenerate from requirements-hybrid.in with:
+#   uv pip compile requirements-hybrid.in --python-version 3.11 \
+#     --python-platform x86_64-unknown-linux-gnu \
+#     --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu \
+#     --index-strategy unsafe-best-match --no-header -o requirements-hybrid.lock
+# Install with the same extra-index-url plus --only-binary=llama-cpp-python.
+annotated-types==0.8.0
+    # via pydantic
+anyio==4.16.0
+    # via
+    #   httpx
+    #   httpx2
+    #   openai
+certifi==2026.10.23
+    # via
+    #   httpcore
+    #   httpx
+click==8.5.0
+    # via huggingface-hub
+diskcache==5.6.3
+    # via llama-cpp-python
+distro==1.9.0
+    # via openai
+filelock==4.2.6
+    # via huggingface-hub
+flatbuffers==25.12.19
+    # via onnxruntime
+fsspec==2026.9.0
+    # via huggingface-hub
+h11==0.16.0
+    # via
+    #   httpcore
+    #   httpcore2
+hf-xet==1.8.0
+    # via huggingface-hub
+httpcore==1.0.9
+    # via httpx
+httpcore2==2.16.0
+    # via httpx2
+httpx==0.28.1
+    # via openai
+httpx2==2.16.0
+    # via huggingface-hub
+huggingface-hub==2.4.0
+    # via tokenizers
+idna==3.20
+    # via
+    #   anyio
+    #   httpx
+    #   httpx2
+jinja2==3.1.6
+    # via llama-cpp-python
+jiter==0.18.0
+    # via openai
+llama-cpp-python==0.3.22
+    # via -r requirements-hybrid.in
+markupsafe==3.0.4
+    # via jinja2
+numpy==2.3.5
+    # via
+    #   -r requirements-hybrid.in
+    #   llama-cpp-python
+    #   onnxruntime
+onnxruntime==1.31.1
+    # via -r requirements-hybrid.in
+openai==2.54.0
+    # via -r requirements.txt
+packaging==26.3
+    # via
+    #   huggingface-hub
+    #   onnxruntime
+protobuf==7.36.2
+    # via onnxruntime
+pydantic==2.14.2
+    # via openai
+pydantic-core==2.50.2
+    # via pydantic
+pyyaml==6.0.3
+    # via huggingface-hub
+sniffio==1.3.1
+    # via openai
+tokenizers==0.23.3
+    # via -r requirements-hybrid.in
+tqdm==4.70.1
+    # via
+    #   huggingface-hub
+    #   openai
+truststore==0.10.5
+    # via
+    #   httpcore2
+    #   httpx2
+typing-extensions==4.16.0
+    # via
+    #   anyio
+    #   httpx2
+    #   huggingface-hub
+    #   llama-cpp-python
+    #   openai
+    #   pydantic
+    #   pydantic-core
+    #   typing-inspection
+typing-inspection==0.4.4
+    # via pydantic

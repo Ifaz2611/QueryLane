@@ -103,7 +103,8 @@ pip install -e ".[dev]"
 ```
 
 This installs:
-- `pytest` - Testing framework
+- `pytest` / `pytest-cov` - Testing framework and coverage
+- `pre-commit` - Ruff and secret-scanning hooks
 - `ruff` - Python linter
 
 #### For Fine-Tuning
@@ -387,7 +388,10 @@ pytest
 pytest -v
 
 # Run specific test file
-pytest tests/test_router.py
+pytest tests/test_core.py -v
+
+# Run the secret-scanning hook over every tracked file
+python scripts/check_secrets.py --all
 ```
 
 ## Troubleshooting

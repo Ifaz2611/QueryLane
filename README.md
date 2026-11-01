@@ -94,6 +94,7 @@ pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-c
 **For development/testing:**
 ```bash
 pip install -e ".[dev]"
+pre-commit install  # enable ruff + secret scanning before each commit
 ```
 
 **For fine-tuning capabilities:**
@@ -257,7 +258,9 @@ eval/             Development tools: judge, local benchmark, specialist precisio
 finetune/         Fine-tuning pipeline: synthetic data generator, LoRA training, GGUF conversion, notebooks
 models/           ONNX configs and tokenizers (weights are gitignored)
 testio/           Local input batches for practice, development, and stress testing
-tests/            Test suite for core functionality
+tests/            Router, PAL fuzz, cloud, local calibration, deadline, and secret-scan tests
+scripts/          Secret-scanning hook shared by pre-commit and CI
+requirements.lock Fully pinned, hash-verified cloud image dependencies
 Dockerfile*       Various Docker images: cloud-only, local, phase-2, and versioned hybrid builds
 SCORES.md         Historical evaluation log with token/accuracy findings
 TODO.md           Roadmap, next steps, and known limitations
@@ -271,6 +274,9 @@ The default `Dockerfile` creates a minimal cloud-only image containing only the 
 
 ```bash
 docker build -t querylane .
+# The image runs as uid/gid 10001. Make the bind-mounted output directory
+# writable by that uid (or use a named volume) before starting the container.
+mkdir -p testio/output && chmod 0777 testio/output
 docker run --rm \
   -e FIREWORKS_API_KEY \
   -e FIREWORKS_BASE_URL \
@@ -279,6 +285,10 @@ docker run --rm \
   -v "$PWD/testio/output:/output" \
   querylane
 ```
+
+The base image is pinned by manifest digest and runtime dependencies are
+installed from `requirements.lock` with `--require-hashes`; hybrid images use
+`requirements-hybrid.lock`. This makes image rebuilds reproducible.
 
 ### Hybrid Images
 
@@ -298,6 +308,7 @@ For local development with specialist support:
 
 ```bash
 docker build -f Dockerfile.local -t querylane-local .
+mkdir -p testio/output && chmod 0777 testio/output
 docker run --rm \
   -e FIREWORKS_API_KEY \
   -e FIREWORKS_BASE_URL \
@@ -350,4 +361,4 @@ See [`TODO.md`](TODO.md) for a detailed roadmap of planned features and known is
 
 ## License
 
-This project is currently in development. A license will be added before publication.
+Released under the [MIT License](LICENSE).

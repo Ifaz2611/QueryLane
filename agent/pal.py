@@ -11,7 +11,12 @@ import ast
 import math
 import re
 
-_EXPR_LINE_RE = re.compile(r"EXPR:\s*([^|\n]+)", re.IGNORECASE)
+# Stop only at the documented unit delimiter (or end of line), not at every
+# pipe: a model-emitted bitwise "1 | 2" must reach safe_eval and be rejected
+# instead of being silently truncated to "1".
+_EXPR_LINE_RE = re.compile(
+    r"EXPR:\s*(.*?)(?=\s*\|\s*UNIT\s*:|\n|$)", re.IGNORECASE
+)
 _UNIT_RE = re.compile(r"\|\s*UNIT:\s*([^\n|]*)", re.IGNORECASE)
 
 # A single expression answers a single quantity. Questions asking for two
@@ -72,7 +77,10 @@ def extract_expression(text: str):
     match = _EXPR_LINE_RE.search(text)
     if not match:
         return None
-    candidate = match.group(1).replace("`", "").splitlines()[0].strip()
+    candidate = match.group(1).replace("`", "").strip()
+    if not candidate:
+        return None
+    candidate = candidate.splitlines()[0].strip()
     tokens = candidate.split()
     while tokens:
         attempt = " ".join(tokens)

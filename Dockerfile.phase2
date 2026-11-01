@@ -1,22 +1,37 @@
 # Hybrid submission image: local model for proven categories, cloud for the rest.
 # The heavy weights layer sits BEFORE the code layer so code edits never
 # invalidate it (pushes after the first only upload the small code layer).
-FROM python:3.11-slim
+# Base tag python:3.11-slim is pinned by manifest digest; see Dockerfile.
+FROM python:3.11-slim@sha256:673719e071ecf27434fd2635bbd8d00f49f4fdd81f243143438a42ced8bedf60
 LABEL org.opencontainers.image.title="QueryLane" \
       org.opencontainers.image.description="Cost-aware LLM query routing (hybrid phase 2 image)"
 
+ENV HOME=/home/querylane \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir llama-cpp-python \
-      --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+RUN groupadd --gid 10001 querylane \
+ && useradd --uid 10001 --gid querylane --create-home \
+      --home-dir /home/querylane --shell /usr/sbin/nologin querylane \
+ && mkdir -p /output \
+ && chown -R querylane:querylane /app /output /home/querylane
 
-COPY models/qwen2.5-3b-instruct-q4_k_m.gguf ./models/model.gguf
+# One lock covers the local GGUF runtime and the ONNX specialist runtimes.
+COPY requirements-hybrid.lock ./
+RUN pip install --no-cache-dir -r requirements-hybrid.lock \
+      --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu \
+      --only-binary=llama-cpp-python
 
-COPY agent/ ./agent/
+COPY --chown=querylane:querylane models/qwen2.5-3b-instruct-q4_k_m.gguf ./models/model.gguf
+
+COPY --chown=querylane:querylane agent/ ./agent/
 
 ENV LOCAL_CATEGORIES="sentiment,ner,math"
 ENV LOCAL_MODEL_PATH="/app/models/model.gguf"
+
+USER querylane
 
 ENTRYPOINT ["python", "-m", "agent.main"]
