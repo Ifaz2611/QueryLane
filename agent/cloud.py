@@ -64,6 +64,8 @@ class CloudClient:
         self._lock = threading.Lock()
         self._total_tokens = 0
         self._calls = 0
+        self._category_tokens: dict = {}
+        self._category_calls: dict = {}
 
     @classmethod
     def from_env(cls) -> "CloudClient":
@@ -86,6 +88,22 @@ class CloudClient:
     def call_count(self) -> int:
         return self._calls
 
+    def tokens_for_category(self, category: str) -> int:
+        with self._lock:
+            return self._category_tokens.get(category, 0)
+
+    def calls_for_category(self, category: str) -> int:
+        with self._lock:
+            return self._category_calls.get(category, 0)
+
+    def tokens_by_category(self) -> dict:
+        with self._lock:
+            return dict(self._category_tokens)
+
+    def calls_by_category(self) -> dict:
+        with self._lock:
+            return dict(self._category_calls)
+
     def _models_for(self, category: str) -> list:
         """Order ALLOWED_MODELS by per-category preference tags; keep every
         allowed model as a fallback so a missing deployment never strands us."""
@@ -102,17 +120,28 @@ class CloudClient:
 
     def answer(self, category: str, prompt: str) -> str:
         prompt = strip_instruction(category, prompt)
-        if category == "math":
-            # Cloud math path kept behaviorally identical to the twice-scored
-            # v13: PAL first, step-by-step only on parse failure. The multipart
-            # detector gates only the LOCAL path (agent/main.py), where routing
-            # a two-quantity question away from single-EXPR is pure upside.
-            text = self._answer_with_spec(prompts.SPECS[category], category, prompt)
-            parsed = pal.answer_from_expression(text)
-            if parsed is not None:
-                return parsed
-            return self._answer_with_spec(prompts.MATH_FALLBACK, category, prompt)
-        return self._answer_with_spec(prompts.SPECS[category], category, prompt)
+        tokens_before = self._total_tokens
+        try:
+            if category == "math":
+                # Cloud math path kept behaviorally identical to the twice-scored
+                # v13: PAL first, step-by-step only on parse failure. The multipart
+                # detector gates only the LOCAL path (agent/main.py), where routing
+                # a two-quantity question away from single-EXPR is pure upside.
+                text = self._answer_with_spec(prompts.SPECS[category], category, prompt)
+                parsed = pal.answer_from_expression(text)
+                if parsed is not None:
+                    return parsed
+                return self._answer_with_spec(prompts.MATH_FALLBACK, category, prompt)
+            return self._answer_with_spec(prompts.SPECS[category], category, prompt)
+        finally:
+            used = max(0, self._total_tokens - tokens_before)
+            with self._lock:
+                self._category_tokens[category] = (
+                    self._category_tokens.get(category, 0) + used
+                )
+                self._category_calls[category] = (
+                    self._category_calls.get(category, 0) + 1
+                )
 
     def _answer_with_spec(self, spec, category: str, prompt: str) -> str:
         last_error = None

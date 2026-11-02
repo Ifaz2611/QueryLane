@@ -45,8 +45,8 @@ class LocalTestBase(unittest.TestCase):
 
     def setUp(self):
         self._original = {name: getattr(local, name) for name in self._STATE}
+        local.reset_budgets()
         local._speed_ok = None
-        local._time_spent = 0.0
         local._tps = 0.0
         local._llm = None
         local._import_ok = None
@@ -261,6 +261,99 @@ class NormalizeAndSpanTests(unittest.TestCase):
     def test_capitalized_spans_keep_connectors(self):
         spans = local._capitalized_spans("The Bank of England met in New York")
         self.assertEqual(spans, ["Bank of England", "New York"])
+
+
+class CategoryBudgetAndProofTests(LocalTestBase):
+    def test_single_category_exhaustion_does_not_disable_other_categories(self):
+        """A slow category that exhausts its fallback budget must not lock out others."""
+        local._speed_ok = True
+        local._tps = 2.0  # speed clears bars for math, ner, factual
+        local._time_spent = 50.0  # well below global TIME_BUDGET (300s)
+
+        self.assertTrue(local.category_enabled("factual"))
+        self.assertTrue(local.category_enabled("math"))
+        self.assertTrue(local.category_enabled("ner"))
+
+        # Consume factual's budget
+        budget = local.category_budget("factual")
+        with local._budget_lock:
+            local._category_time_spent["factual"] = budget
+
+        # Factual is now disabled due to fallback budget exhaustion
+        self.assertFalse(local.category_enabled("factual"))
+        # But math and ner remain enabled with plenty of budget!
+        self.assertTrue(local.category_enabled("math"))
+        self.assertTrue(local.category_enabled("ner"))
+
+    def test_global_budget_exhaustion_disables_all(self):
+        """When global TIME_BUDGET is reached, all categories are disabled."""
+        local._speed_ok = True
+        local._tps = 2.0
+        local._time_spent = local.TIME_BUDGET
+
+        self.assertFalse(local.ready())
+        self.assertFalse(local.category_enabled("math"))
+        self.assertFalse(local.category_enabled("factual"))
+
+    def test_category_budget_custom_env_override(self):
+        """Category budget can be configured through environment variables."""
+        with mock.patch.dict(local.os.environ, {"LOCAL_CATEGORY_BUDGET_FACTUAL": "45.5"}):
+            self.assertEqual(local.category_budget("factual"), 45.5)
+
+    def test_category_time_tracking_in_answer(self):
+        """answer() records elapsed time both globally and per category."""
+        fake = _FakeLlama("Answer: 42")
+        local._llm = fake
+        local._tps = 1.0
+        local._speed_ok = True
+
+        with mock.patch.object(local, "ready", return_value=True), mock.patch.object(
+            local.time, "time", side_effect=[10.0, 15.0]
+        ):
+            local.answer("factual", "What is the answer?")
+
+        self.assertEqual(local.category_time_spent("factual"), 5.0)
+        self.assertEqual(local._time_spent, 5.0)
+        self.assertEqual(local.category_time_spent("math"), 0.0)
+
+    def test_answer_returns_empty_when_category_budget_exhausted(self):
+        """answer() returns empty string if category fallback budget is exhausted."""
+        fake = _FakeLlama("Answer: 42")
+        local._llm = fake
+        local._tps = 1.0
+        local._speed_ok = True
+
+        with local._budget_lock:
+            local._category_time_spent["factual"] = local.category_budget("factual") + 1.0
+
+        with mock.patch.object(local, "ready", return_value=True):
+            ans = local.answer("factual", "What is the answer?")
+        self.assertEqual(ans, "")
+
+    def test_unproven_summarization_and_logic_disabled_by_default(self):
+        """Summarization and logic must remain disabled until proven by fine-tune."""
+        local._speed_ok = True
+        local._tps = 100.0  # Even at blistering speeds
+
+        self.assertFalse(local.category_proven("summarization"))
+        self.assertFalse(local.category_proven("logic"))
+        self.assertFalse(local.category_enabled("summarization"))
+        self.assertFalse(local.category_enabled("logic"))
+
+        # answer() returns empty when unproven
+        fake = _FakeLlama("A summary")
+        local._llm = fake
+        with mock.patch.object(local, "ready", return_value=True):
+            self.assertEqual(local.answer("summarization", "Some text"), "")
+            self.assertEqual(local.answer("logic", "A puzzle"), "")
+
+    def test_proven_category_can_be_enabled(self):
+        """When proven via environment flag, category_proven returns True."""
+        with mock.patch.dict(local.os.environ, {"PROVE_LOCAL_SUMMARIZATION": "1"}):
+            self.assertTrue(local.category_proven("summarization"))
+            local._speed_ok = True
+            local._tps = 100.0
+            self.assertTrue(local.category_enabled("summarization"))
 
 
 if __name__ == "__main__":

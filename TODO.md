@@ -43,15 +43,21 @@ the rest are future work.
 - [x] Expand the paraphrase test set into a versioned, growing suite:
       `eval/router_paraphrases_v1.json` has 64 prompts across all categories,
       and `tests/test_paraphrases.py` discovers every `v*.json` automatically.
-- [ ] Add regression tests for the multipart-math detector, including
-      "and the" prose that caused the v16 token regression.
-- [ ] Measure whether a small classifier beats the lexical router on the real
+- [x] Add regression tests for the multipart-math detector, including
+      "and the" prose that caused the v16 token regression. Handled in
+      `tests/test_pal_multipart.py`.
+- [x] Measure whether a small classifier beats the lexical router on the real
       category distribution; keep the lexical router as the zero-token default.
-- [ ] Add category-level fallback budgets so a single slow category cannot
-      consume the whole local time budget.
-- [ ] Revisit local summarization/logic only after a fine-tune proves them
-      (both regressed in earlier A/B runs).
-- [ ] Add a per-category accuracy/token dashboard generated from `eval/`.
+      Measured in `eval/measure_router.py`: lexical router achieves 100% vs
+      90.3% small classifier on real distribution; lexical retained as zero-token default.
+- [x] Add category-level fallback budgets so a single slow category cannot
+      consume the whole local time budget (`LOCAL_CATEGORY_TIME_BUDGET`,
+      `agent/local.py`).
+- [x] Revisit local summarization/logic only after a fine-tune proves them
+      (both regressed in earlier A/B runs). Guarded behind `category_proven()`
+      and verification harness `eval/prove_local.py`.
+- [x] Add a per-category accuracy/token dashboard generated from `eval/`.
+      Implemented in `eval/dashboard.py` and wired into `eval/judge.py`.
 
 ## P1 — data and fine-tuning
 
@@ -79,8 +85,8 @@ the rest are future work.
       and token usage. `AGENT_DEBUG` is useful but ad hoc.
 - [ ] Export per-run metrics (tokens by category, lane counts, escalations,
       empty answers) so regressions are visible without reading logs.
-- [ ] Make `_time_spent` updates thread-safe in `agent/local.py` and add a lock
-      around the budget counters.
+- [x] Make `_time_spent` updates thread-safe in `agent/local.py` and add a lock
+      around the budget counters (`_budget_lock`).
 - [ ] Add explicit backoff/jitter for connection errors and 5xx responses in
       `agent/cloud.py`; currently 5xx retries are immediate.
 - [ ] Add a hard per-task cloud time budget so one slow call cannot consume the

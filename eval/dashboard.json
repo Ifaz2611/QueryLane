@@ -1,0 +1,121 @@
+{
+  "summary": {
+    "total_tasks": 40,
+    "total_passed": 30,
+    "total_failed": 10,
+    "overall_accuracy": 75.0,
+    "overall_gate_passed": false,
+    "total_tokens": 3000,
+    "total_calls": 40,
+    "avg_tokens_per_task": 75.0,
+    "lanes": {
+      "cloud": 40
+    }
+  },
+  "categories": {
+    "factual": {
+      "total_tasks": 5,
+      "passed": 4,
+      "failed": 1,
+      "accuracy": 80.0,
+      "gate_passed": true,
+      "tokens": 375,
+      "calls": 5,
+      "avg_tokens": 75.0,
+      "lanes": {
+        "cloud": 5
+      }
+    },
+    "math": {
+      "total_tasks": 5,
+      "passed": 5,
+      "failed": 0,
+      "accuracy": 100.0,
+      "gate_passed": true,
+      "tokens": 375,
+      "calls": 5,
+      "avg_tokens": 75.0,
+      "lanes": {
+        "cloud": 5
+      }
+    },
+    "sentiment": {
+      "total_tasks": 5,
+      "passed": 5,
+      "failed": 0,
+      "accuracy": 100.0,
+      "gate_passed": true,
+      "tokens": 375,
+      "calls": 5,
+      "avg_tokens": 75.0,
+      "lanes": {
+        "cloud": 5
+      }
+    },
+    "summarization": {
+      "total_tasks": 5,
+      "passed": 3,
+      "failed": 2,
+      "accuracy": 60.0,
+      "gate_passed": false,
+      "tokens": 375,
+      "calls": 5,
+      "avg_tokens": 75.0,
+      "lanes": {
+        "cloud": 5
+      }
+    },
+    "ner": {
+      "total_tasks": 5,
+      "passed": 5,
+      "failed": 0,
+      "accuracy": 100.0,
+      "gate_passed": true,
+      "tokens": 375,
+      "calls": 5,
+      "avg_tokens": 75.0,
+      "lanes": {
+        "cloud": 5
+      }
+    },
+    "code_debug": {
+      "total_tasks": 5,
+      "passed": 3,
+      "failed": 2,
+      "accuracy": 60.0,
+      "gate_passed": false,
+      "tokens": 375,
+      "calls": 5,
+      "avg_tokens": 75.0,
+      "lanes": {
+        "cloud": 5
+      }
+    },
+    "logic": {
+      "total_tasks": 5,
+      "passed": 5,
+      "failed": 0,
+      "accuracy": 100.0,
+      "gate_passed": true,
+      "tokens": 375,
+      "calls": 5,
+      "avg_tokens": 75.0,
+      "lanes": {
+        "cloud": 5
+      }
+    },
+    "code_gen": {
+      "total_tasks": 5,
+      "passed": 0,
+      "failed": 5,
+      "accuracy": 0.0,
+      "gate_passed": false,
+      "tokens": 375,
+      "calls": 5,
+      "avg_tokens": 75.0,
+      "lanes": {
+        "cloud": 5
+      }
+    }
+  }
+}

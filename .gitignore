@@ -17,6 +17,8 @@ dist/
 .pytest_cache/
 .ruff_cache/
 .venv/
+.coverage
+coverage.xml
 
 # Local test artifacts
 testio/output*/

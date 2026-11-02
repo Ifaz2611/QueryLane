@@ -58,10 +58,85 @@ TIME_BUDGET = float(os.environ.get("LOCAL_TIME_BUDGET", "300"))
 # Measured: the grader runs the 1.5B at ~1.2 tok/s (our 0.25-CPU throttle).
 MIN_TOKENS_PER_SEC = float(os.environ.get("LOCAL_MIN_TPS", "0.4"))
 
+# Category-level fallback budgets: prevent any single slow category from
+# consuming the global local time budget and locking out other local categories.
+DEFAULT_CATEGORY_TIME_BUDGET = float(
+    os.environ.get("LOCAL_CATEGORY_TIME_BUDGET", "120.0")
+)
+
+_CATEGORY_TIME_BUDGETS = {
+    "math": float(os.environ.get("LOCAL_CATEGORY_BUDGET_MATH", "100.0")),
+    "ner": float(os.environ.get("LOCAL_CATEGORY_BUDGET_NER", "100.0")),
+    "sentiment": float(os.environ.get("LOCAL_CATEGORY_BUDGET_SENTIMENT", "60.0")),
+    "factual": float(os.environ.get("LOCAL_CATEGORY_BUDGET_FACTUAL", "90.0")),
+    "summarization": float(os.environ.get("LOCAL_CATEGORY_BUDGET_SUMMARIZATION", "60.0")),
+    "logic": float(os.environ.get("LOCAL_CATEGORY_BUDGET_LOGIC", "60.0")),
+    "code_debug": float(os.environ.get("LOCAL_CATEGORY_BUDGET_CODE_DEBUG", "60.0")),
+    "code_gen": float(os.environ.get("LOCAL_CATEGORY_BUDGET_CODE_GEN", "60.0")),
+}
+
+# Summarization and logic regressed in earlier A/B runs (v13 summarization: 0/5
+# due to hallucination/length violations; v14 logic: 0/5 deduction failures).
+# Both remain disabled (bar 99.0 TPS) unless an explicit fine-tune evaluation
+# proves them above the 80% accuracy gate.
+PROVEN_CATEGORIES = set(
+    c.strip().lower()
+    for c in os.environ.get("LOCAL_PROVEN_CATEGORIES", "").split(",")
+    if c.strip()
+)
+
+_budget_lock = threading.Lock()
 _time_spent = 0.0
+_category_time_spent: dict = {}
 _speed_ok = None  # None = not yet calibrated
 _tps = 0.0
 _calibrated = threading.Event()
+
+def category_budget(category: str) -> float:
+    """Return the time budget for a specific category in seconds."""
+    env_key = f"LOCAL_CATEGORY_BUDGET_{category.upper()}"
+    if env_key in os.environ:
+        try:
+            return float(os.environ[env_key])
+        except ValueError:
+            pass
+    return _CATEGORY_TIME_BUDGETS.get(category, DEFAULT_CATEGORY_TIME_BUDGET)
+
+
+def category_time_spent(category: str) -> float:
+    """Return wall-clock seconds spent answering tasks in this category."""
+    with _budget_lock:
+        return _category_time_spent.get(category, 0.0)
+
+
+def category_budget_remaining(category: str) -> float:
+    """Remaining time budget for a specific category."""
+    budget = category_budget(category)
+    spent = category_time_spent(category)
+    return max(0.0, budget - spent)
+
+
+def reset_budgets() -> None:
+    """Reset global and per-category time-spent counters."""
+    global _time_spent
+    with _budget_lock:
+        _time_spent = 0.0
+        _category_time_spent.clear()
+
+
+def category_proven(category: str) -> bool:
+    """True if this category is proven by fine-tune A/B evaluation.
+
+    Local summarization and logic regressed in earlier A/B runs (summarization:
+    0/5 due to hallucination/length violations; v14 logic: 0/5 deduction failures).
+    Both are blocked by default until an explicit fine-tune evaluation proves them.
+    """
+    if category in ("summarization", "logic"):
+        if category in PROVEN_CATEGORIES:
+            return True
+        env_flag = os.environ.get(f"PROVE_LOCAL_{category.upper()}", "").lower()
+        return env_flag in ("1", "true", "yes")
+    return True
 
 # Per-category speed bars: categories degrade individually instead of local
 # switching off wholesale. Bars follow output length: math-PAL emits ~15
@@ -155,7 +230,9 @@ def available() -> bool:
             _import_ok = False
     if not _import_ok:
         return False
-    if _speed_ok is False or _time_spent >= TIME_BUDGET:
+    with _budget_lock:
+        spent = _time_spent
+    if _speed_ok is False or spent >= TIME_BUDGET:
         return False
     return True
 
@@ -214,7 +291,9 @@ def _calibrate() -> None:
         _speed_ok = False
         print(f"local calibration failed, local disabled: {exc}", flush=True)
     finally:
-        _time_spent += time.time() - started
+        elapsed = time.time() - started
+        with _budget_lock:
+            _time_spent += elapsed
         _calibrated.set()
 
 
@@ -235,12 +314,25 @@ def preload() -> None:
 
 def ready() -> bool:
     """True once calibration has finished and approved local inference."""
-    return _speed_ok is True and _time_spent < TIME_BUDGET
+    with _budget_lock:
+        spent = _time_spent
+    return _speed_ok is True and spent < TIME_BUDGET
 
 
 def category_enabled(category: str) -> bool:
-    """Whether the measured speed clears this category's bar."""
-    return ready() and _tps >= _CATEGORY_MIN_TPS.get(category, MIN_TOKENS_PER_SEC)
+    """Whether the measured speed clears this category's bar, its category-level
+    fallback budget has not been exhausted, and (for unproven categories like
+    summarization and logic) it has been proven by an A/B evaluation."""
+    if not ready():
+        return False
+    if not category_proven(category):
+        return False
+    if _tps < _CATEGORY_MIN_TPS.get(category, MIN_TOKENS_PER_SEC):
+        return False
+    with _budget_lock:
+        if _category_time_spent.get(category, 0.0) >= category_budget(category):
+            return False
+    return True
 
 
 def wait_ready(timeout: float) -> bool:
@@ -369,8 +461,11 @@ def answer_ok(category: str, answer: str, prompt: str = "") -> bool:
 
 def answer(category: str, prompt: str) -> str:
     global _time_spent
-    if not ready():
-        return ""  # budget exhausted or too slow; caller falls back to cloud
+    if not ready() or not category_proven(category):
+        return ""  # budget exhausted, unproven, or too slow; caller falls back to cloud
+    with _budget_lock:
+        if _category_time_spent.get(category, 0.0) >= category_budget(category):
+            return ""  # category-level fallback budget exhausted
     started = time.time()
     try:
         llm = _get_llm()
@@ -390,7 +485,12 @@ def answer(category: str, prompt: str) -> str:
                 max_tokens=cap,
             )
     finally:
-        _time_spent += time.time() - started
+        elapsed = time.time() - started
+        with _budget_lock:
+            _time_spent += elapsed
+            _category_time_spent[category] = (
+                _category_time_spent.get(category, 0.0) + elapsed
+            )
     text = (result["choices"][0]["message"]["content"] or "").strip()
     if category == "math":
         # Evaluate the emitted expression; None (bad expr) escalates to cloud.

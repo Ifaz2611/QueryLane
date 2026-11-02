@@ -24,6 +24,7 @@ from openai import OpenAI
 
 from agent.cloud import CloudClient
 from agent.main import answer_task
+from eval.dashboard import build_dashboard
 
 DEV_TASKS = os.path.join(os.path.dirname(__file__), "tasks_dev.json")
 
@@ -112,6 +113,12 @@ def main():
         "--save", default="eval/results_dev.json", help="where to save answers"
     )
     parser.add_argument("--category", help="only run one category")
+    parser.add_argument(
+        "--out-md", default="eval/dashboard.md", help="path to write markdown dashboard"
+    )
+    parser.add_argument(
+        "--out-json", default="eval/dashboard.json", help="path to write JSON dashboard"
+    )
     args = parser.parse_args()
 
     with open(DEV_TASKS, encoding="utf-8") as fh:
@@ -160,6 +167,15 @@ def main():
     if agent_tokens is not None:
         print(f"agent fireworks tokens: {agent_tokens} across {agent_calls} calls")
     print(f"judge tokens (dev spend only): {judge.tokens}")
+
+    # Generate and display the per-category accuracy/token dashboard
+    verdicts = {entry["task_id"]: passed for entry, passed, _ in graded}
+    report = build_dashboard(tasks, answers, graded_verdicts=verdicts)
+    print("\n" + report.format_table())
+    report.save_markdown(args.out_md)
+    report.save_json(args.out_json)
+    print(f"\nDashboard saved to: {args.out_md} and {args.out_json}")
+
     return 0 if pct >= 80.0 else 1
 
 

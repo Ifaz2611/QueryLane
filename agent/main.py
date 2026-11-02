@@ -60,12 +60,21 @@ _LOCAL_COST_ORDER = {
 }
 
 
+def _get_cloud_tokens(cloud) -> int:
+    try:
+        val = cloud.total_tokens()
+        return int(val) if isinstance(val, (int, float)) and not isinstance(val, bool) else 0
+    except Exception:
+        return 0
+
+
 def answer_task(cloud: CloudClient, task: dict) -> dict:
     task_id = str(task.get("task_id", ""))
     prompt = str(task.get("prompt", ""))
     category, target, confidence = _route(prompt)
     low_confidence = confidence < MIN_CONFIDENCE
     started = time.time()
+    tokens_before = _get_cloud_tokens(cloud)
 
     if category == "math" and target == "local" and pal.is_multipart(prompt):
         target = "cloud"  # single-EXPR local path can't answer two quantities
@@ -125,11 +134,13 @@ def answer_task(cloud: CloudClient, task: dict) -> dict:
         f"conf={confidence:.2f} elapsed={time.time() - started:.1f}s",
         flush=True,
     )
+    task_tokens = max(0, _get_cloud_tokens(cloud) - tokens_before)
     return {
         "task_id": task_id,
         "answer": answer.strip(),
         "category": category,
         "routed": target,
+        "tokens": task_tokens,
     }
 
 
