@@ -44,16 +44,23 @@ LOCAL_CATEGORIES: set = set(
 
 _NER_RE = re.compile(
     r"named entit|entities and their types|"
-    r"(?:extract|identify|list|find)(?:\s+\w+){0,4}\s+entit|"
+    r"(?:extract|identify|list|find|pull out|tag|mark)(?:\s+\w+){0,4}\s+entit|"
     r"entit(?:y|ies).{0,30}\b(?:person|organi[sz]ation|location|date)\b|"
     r"(?:person|people)\b.{0,25}\borgani[sz]ation.{0,30}\b(?:place|location|date)|"
-    r"(?:identify|list|extract|find) every (?:person|organi[sz]ation|place|location|name)",
+    r"(?:identify|list|extract|find) every "
+    r"(?:person|organi[sz]ation|place|location|name)|"
+    r"(?:find|identify|list|extract|pull out|tag|mark)\s+(?:all\s+)?(?:the\s+)?"
+    r"(?:people|persons?|names?|places?|locations?|organi[sz]ations?|dates?|entities)"
+    r"\b.{0,40}\b(?:mentioned|named|in (?:this|the) "
+    r"(?:sentence|text|passage|paragraph|excerpt)|below)|"
+    r"\bproper nouns?\b.{0,40}\b(?:person|place|organi[sz]ation|type|label)",
     re.IGNORECASE,
 )
 # Strong code signals only; prose words like "while" or "returns" must not fire.
 _CODE_MARKER_RE = re.compile(
-    r"def \w+\s*\(|function\s+\w+\s*\(|```|print\s*\(|=>|[{}]|"
-    r"\breturn \w+|==|\+=|-=|\w+\(\)|\w+\[\w*\]|\blambda \w"
+    r"def \w+\s*\(|function\s+\w+\s*\(|```|print\s*\(|console\.log\s*\(|"
+    r"class\s+\w+|while\s+True\b|for\s+\w+\s+in\s+\w+\s*:|"
+    r"=>|[{}]|\breturn \w+|==|\+=|-=|\w+\(\)|\w+\[\w*\]|\blambda \w"
 )
 _DEBUG_RE = re.compile(
     r"\bbugg?y?\b|\bfix (?:it|this|the)\b|find and fix|\bdebug\b|"
@@ -70,7 +77,8 @@ _CODE_GEN_RE = re.compile(
 )
 _SUMMARY_VERB_RE = re.compile(
     r"\bsummari[sz]e\b|\btl;?dr\b|\bcondense\b|\bsummary\b|\brecap\b|"
-    r"\bbrief overview\b|\bshorten\b|\bdistill\b|\bboil down\b",
+    r"\bbrief overview\b|\bshorten\b|\bdistill\b|\bboil down\b|"
+    r"\breduce\b.{0,30}\b(?:summary|points?|sentences?|words?|paragraph)\b",
     re.IGNORECASE,
 )
 _LENGTH_CUE_RE = re.compile(
@@ -119,34 +127,118 @@ def _looks_numeric(prompt: str) -> bool:
     return bool(_MATH_CUE_RE.search(prompt)) and len(_NUMBER_RE.findall(prompt)) >= 2
 
 
-def classify(prompt: str) -> str:
+# Below this score the router keeps its best-guess category for logging but
+# sends the task straight to cloud. A specialist/local answer on an ambiguous
+# prompt risks the accuracy gate for a tiny token saving.
+MIN_CONFIDENCE = float(os.environ.get("ROUTER_MIN_CONFIDENCE", "0.70"))
+CONFIDENCE_THRESHOLD = MIN_CONFIDENCE
+
+# Earlier checks win ties. Scores encode both signal strength and that order.
+_CATEGORY_PRIORITY = [
+    NER,
+    CODE_DEBUG,
+    CODE_GEN,
+    SUMMARIZATION,
+    SENTIMENT,
+    LOGIC,
+    MATH,
+    FACTUAL,
+]
+
+_STRONG = {
+    NER: 0.98,
+    CODE_DEBUG: 0.97,
+    CODE_GEN: 0.94,
+    SUMMARIZATION: 0.92,
+    SENTIMENT: 0.90,
+    LOGIC: 0.84,
+    MATH: 0.86,
+}
+_LENGTH_CUE_SCORE = 0.72
+
+
+def _signals(prompt: str) -> dict:
+    """Positive evidence per category; absence means no cue matched."""
+    scores = {}
     has_code = bool(_CODE_MARKER_RE.search(prompt))
 
+    def bump(category: str, score: float):
+        scores[category] = max(scores.get(category, 0.0), score)
+
     if _NER_RE.search(prompt):
-        return NER
+        bump(NER, _STRONG[NER])
     if has_code and _DEBUG_RE.search(prompt):
-        return CODE_DEBUG
+        bump(CODE_DEBUG, _STRONG[CODE_DEBUG])
     if _CODE_GEN_RE.search(prompt):
-        return CODE_GEN
+        bump(CODE_GEN, _STRONG[CODE_GEN])
     if _SUMMARY_VERB_RE.search(prompt):
-        return SUMMARIZATION
+        bump(SUMMARIZATION, _STRONG[SUMMARIZATION])
     if _SENTIMENT_RE.search(prompt):
-        return SENTIMENT
+        bump(SENTIMENT, _STRONG[SENTIMENT])
     if _LOGIC_RE.search(prompt) and not _looks_numeric(prompt):
-        return LOGIC
+        bump(LOGIC, _STRONG[LOGIC])
     if _MATH_CUE_RE.search(prompt) and len(_NUMBER_RE.findall(prompt)) >= 2:
-        return MATH
-    if _LOGIC_RE.search(prompt):
-        return LOGIC
+        bump(MATH, _STRONG[MATH])
     # A bare length cue only implies summarization when there is an actual
     # passage attached; short prompts are constrained factual questions.
     if _LENGTH_CUE_RE.search(prompt) and not has_code and len(prompt) > 200:
-        return SUMMARIZATION
-    return FACTUAL
+        bump(SUMMARIZATION, _LENGTH_CUE_SCORE)
+    return scores
 
 
-def route(prompt: str):
-    """Return (category, target) where target is 'local' or 'cloud'."""
-    category = classify(prompt)
+def _best_category(scores: dict) -> str:
+    if not scores:
+        return FACTUAL
+    return max(
+        scores,
+        key=lambda category: (
+            scores[category],
+            -_CATEGORY_PRIORITY.index(category),
+        ),
+    )
+
+
+def _confidence(category: str, scores: dict) -> float:
+    if category == FACTUAL or category not in scores:
+        return 0.30
+    score = scores[category]
+    others = [value for other, value in scores.items() if other != category]
+    if not others:
+        return round(min(1.0, score), 3)
+    second = max(others)
+    margin = max(0.0, score - second)
+    ratio = second / score if score else 0.0
+    confidence = score * (0.70 + 0.30 * min(margin / 0.25, 1.0))
+    if ratio >= 0.85:  # near-tie: another category explains the prompt too
+        confidence *= 0.90
+    return round(max(0.0, min(1.0, confidence)), 3)
+
+
+def classify_with_confidence(prompt: str):
+    """Return (category, confidence) without changing the selected category."""
+    scores = _signals(prompt)
+    category = _best_category(scores)
+    return category, _confidence(category, scores)
+
+
+def classify(prompt: str) -> str:
+    return classify_with_confidence(prompt)[0]
+
+
+def route_with_confidence(prompt: str):
+    """Return (category, target, confidence).
+
+    `target` is always cloud when confidence is below MIN_CONFIDENCE, even if
+    the category is configured for local handling.
+    """
+    category, confidence = classify_with_confidence(prompt)
     target = "local" if category in LOCAL_CATEGORIES else "cloud"
-    return category, target
+    if confidence < MIN_CONFIDENCE:
+        target = "cloud"
+    return category, target, confidence
+
+
+def route(prompt: str, with_confidence: bool = False):
+    """Return (category, target); with_confidence=True adds the score."""
+    result = route_with_confidence(prompt)
+    return result if with_confidence else result[:2]

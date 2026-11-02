@@ -264,8 +264,8 @@ This will log token usage and routing decisions for each task.
 
 Local specialists provide zero-token inference for specific task types. Currently supported:
 
-- **Sentiment analysis** (SST-2 model)
-- **Named Entity Recognition** (experimental, disabled by default)
+- **Sentiment analysis** (SST-2 model, negation- and quote-aware cue gates)
+- **Named Entity Recognition** (enabled by default when the model is present)
 
 ### Step 1: Download ONNX Models
 
@@ -284,7 +284,8 @@ Add to your `.env`:
 ```env
 SST2_MODEL_DIR=/path/to/your/sst2/model
 NER_MODEL_DIR=/path/to/your/ner/model
-NER_SPECIALIST=off  # Set to 'on' to enable NER (experimental)
+NER_SPECIALIST=on  # default; set to 'off' to disable NER
+ROUTER_MIN_CONFIDENCE=0.70  # low-confidence routes go straight to cloud
 ```
 
 ### Step 3: Test Specialists
@@ -298,7 +299,7 @@ This runs specialists on synthetic datasets and reports precision/coverage witho
 ### Expected Performance
 
 - **Sentiment specialist**: ~38% coverage at ~100% precision (designed to escalate on uncertainty)
-- **NER specialist**: Currently experimental, ~22% exact-match precision (disabled by default)
+- **NER specialist**: enabled by default with per-token confidence/margin gates and a completeness guard. It escalates unless every capitalized span and date in the passage is covered, so re-run `eval.spec_precision` with your model weights to measure the current precision/coverage on your host.
 
 ## Using the Local GGUF Model
 

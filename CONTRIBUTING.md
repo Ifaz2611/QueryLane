@@ -290,10 +290,10 @@ for the current list.
 ### Medium Priority (P1)
 
 #### Routing and Accuracy
-- Improve ONNX NER precision above current ~22% exact-match
-- Enhance sentiment specialist coverage (negation scopes, quoted praise, mixed reviews)
-- Add router confidence score
-- Expand paraphrase test set
+- ~~Improve ONNX NER precision and enable it by default~~ (done; see `TODO.md`)
+- ~~Enhance sentiment specialist coverage (negation scopes, quoted praise, mixed reviews)~~ (done)
+- ~~Add router confidence score~~ (done)
+- ~~Expand paraphrase test set~~ (done; add a new `router_paraphrases_v*.json` to grow it)
 - Add regression tests for multipart-math detector
 - Measure if a small classifier beats lexical router
 - Add category-level fallback budgets

@@ -43,13 +43,13 @@ The router in `agent/router.py` classifies each prompt into one of eight categor
 - `logic` - Logical reasoning problems
 - `code_gen` - Code generation tasks
 
-The check order is intentional: instruction verbs (e.g., "extract entities", "fix this bug", "write a function", "summarize") are tested before content cues that might appear within quoted passages. Unknown prompts default to `factual`, which is the safest cloud-routed category.
+The check order is intentional: instruction verbs (e.g., "extract entities", "fix this bug", "write a function", "summarize") are tested before content cues that might appear within quoted passages. Unknown prompts default to `factual`, which is the safest cloud-routed category. Each classification also carries a confidence score; prompts below `ROUTER_MIN_CONFIDENCE` (default `0.70`) are sent straight to cloud even when the category would otherwise run locally.
 
 ### Lane Selection
 
 After classification, `agent/main.py` applies the lanes in sequence:
 
-1. **Specialist Lane** — Sentiment (and optionally NER) via ONNX models. These specialists are self-gating and return empty strings when they detect hedges, contrast, low confidence, or uncertain spans.
+1. **Specialist Lane** — Sentiment and NER (when the ONNX weights are present) via ONNX models. These specialists are self-gating and return empty strings when they detect hedges, quoted marketing copy, low confidence, incomplete entity coverage, or uncertain spans. NER is enabled by default; set `NER_SPECIALIST=off` to disable it.
 
 2. **Local Model Lane** — Only for categories listed in `LOCAL_CATEGORIES`, and only after warm-up calibration proves the host clears the category's speed threshold. This ensures local inference is only used when it's actually faster than cloud.
 
@@ -131,7 +131,8 @@ LOCAL_MODEL_PATH=/app/models/model.gguf
 LOCAL_CATEGORIES=factual,math,ner
 NER_MODEL_DIR=/app/models/ner
 SST2_MODEL_DIR=/app/models/sst2
-NER_SPECIALIST=off  # Set to 'on' to enable experimental NER specialist
+NER_SPECIALIST=on   # default; set to 'off' to disable the NER specialist
+ROUTER_MIN_CONFIDENCE=0.70
 ```
 
 ### Running Queries
@@ -238,7 +239,11 @@ This replays validated synthetic datasets through ONNX specialists and reports c
 | `LOCAL_THREADS` | `2` | Number of llama.cpp threads |
 | `NER_MODEL_DIR` | `/app/models/ner` | Directory for ONNX NER model |
 | `SST2_MODEL_DIR` | `/app/models/sst2` | Directory for ONNX sentiment model |
-| `NER_SPECIALIST` | `off` | Enable experimental ONNX NER specialist (`on`/`off`) |
+| `NER_SPECIALIST` | `on` | Enable the ONNX NER specialist (`on`/`off`) |
+| `NER_MIN_CONFIDENCE` | `0.85` | Per-token confidence floor before NER answers |
+| `NER_MIN_MARGIN` | `0.05` | Per-token top-two label margin before NER answers |
+| `NER_COMPLETENESS_GUARD` | `on` | Escalate unless every capitalized span and date is covered |
+| `ROUTER_MIN_CONFIDENCE` | `0.70` | Send lower-confidence routes directly to cloud |
 | `AGENT_DEBUG` | unset | Enable per-call token usage logging |
 
 ### Fine-Tuning Performance
@@ -254,7 +259,7 @@ Adjust these parameters based on your hardware and workload:
 
 ```text
 agent/            Runtime components: router, prompts, cloud client, local model, specialists, PAL
-eval/             Development tools: judge, local benchmark, specialist precision harness
+eval/             Development tools: judge, local benchmark, specialist precision harness, versioned router paraphrase suites
 finetune/         Fine-tuning pipeline: synthetic data generator, LoRA training, GGUF conversion, notebooks
 models/           ONNX configs and tokenizers (weights are gitignored)
 testio/           Local input batches for practice, development, and stress testing
@@ -336,7 +341,7 @@ QueryLane is a research/competition codebase, not a hosted service. The historic
 ### Current Limitations
 
 - The sentiment specialist has no neutral class; neutral reviews are escalated by design
-- The ONNX NER specialist is disabled by default due to precision concerns (~22% exact-match)
+- The ONNX NER specialist is enabled by default but remains precision-gated: uncertain tokens, MISC spans without a cue, and incomplete entity coverage escalate to cloud
 - Local generative inference is only useful on hosts above per-category speed thresholds
 - The development judge uses an LLM and is not fully deterministic
 - Training datasets `train_all.jsonl` and `train_round2.jsonl` have overlap that needs deduplication

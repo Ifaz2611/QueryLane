@@ -19,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 from agent import local as local_model
 from agent import pal, specialists
 from agent.cloud import CloudClient
-from agent.router import route
+from agent.router import MIN_CONFIDENCE, route
 
 INPUT_PATH = os.environ.get("TASKS_PATH", "/input/tasks.json")
 OUTPUT_PATH = os.environ.get("RESULTS_PATH", "/output/results.json")
@@ -36,6 +36,14 @@ _START = time.time()
 
 def _remaining() -> float:
     return DEADLINE_SECONDS - (time.time() - _START)
+
+
+def _route(prompt: str):
+    """Route with confidence, tolerating old two-tuple test/embedder patches."""
+    result = route(prompt, with_confidence=True)
+    if len(result) == 2:  # backwards-compatible patch or embedder
+        return result[0], result[1], 1.0
+    return result
 
 
 # Highest savings-per-second first: math-PAL emits ~15 tokens (cheapest by
@@ -55,7 +63,8 @@ _LOCAL_COST_ORDER = {
 def answer_task(cloud: CloudClient, task: dict) -> dict:
     task_id = str(task.get("task_id", ""))
     prompt = str(task.get("prompt", ""))
-    category, target = route(prompt)
+    category, target, confidence = _route(prompt)
+    low_confidence = confidence < MIN_CONFIDENCE
     started = time.time()
 
     if category == "math" and target == "local" and pal.is_multipart(prompt):
@@ -63,8 +72,9 @@ def answer_task(cloud: CloudClient, task: dict) -> dict:
 
     answer = ""
     # Non-generative specialists first: ~1s per task on any CPU, zero tokens,
-    # and they escalate ("") on anything uncertain.
-    if category == "sentiment" and specialists.available("sst2"):
+    # and they escalate ("") on anything uncertain. Low-confidence routing
+    # skips them so an ambiguous prompt can never be answered by a specialist.
+    if category == "sentiment" and not low_confidence and specialists.available("sst2"):
         try:
             answer = specialists.sentiment_answer(prompt)
             if answer:
@@ -72,14 +82,9 @@ def answer_task(cloud: CloudClient, task: dict) -> dict:
         except Exception as exc:
             print(f"[{task_id}] sentiment specialist failed: {exc}", flush=True)
             answer = ""
-    elif (
-        category == "ner"
-        and os.environ.get("NER_SPECIALIST", "off") == "on"
-        and specialists.available("ner")
-    ):
-        # Measured 21.9% exact-match precision on 597 ground-truth tasks
-        # (subword merge artifacts, Product/Event collapsing to Other).
-        # Off until a reliable replacement exists; NER answers via cloud.
+    elif category == "ner" and not low_confidence and specialists.ner_enabled():
+        # Self-gating: complete capitalized-span coverage plus a high token
+        # confidence bar, otherwise "" falls through to cloud.
         try:
             answer = specialists.ner_answer(prompt)
             if answer:
@@ -117,7 +122,7 @@ def answer_task(cloud: CloudClient, task: dict) -> dict:
 
     print(
         f"[{task_id}] category={category} route={target} "
-        f"elapsed={time.time() - started:.1f}s",
+        f"conf={confidence:.2f} elapsed={time.time() - started:.1f}s",
         flush=True,
     )
     return {
@@ -167,7 +172,7 @@ def main() -> int:
     # markers cost more than the saved per-call overhead. One call per task.
     def submit_order(task):
         prompt = str(task.get("prompt", ""))
-        category, target = route(prompt)
+        category, target, _ = _route(prompt)
         # Multipart math is flipped to cloud inside answer_task; schedule it
         # with the cloud tasks instead of letting it sit behind local work.
         if target != "local" or (category == "math" and pal.is_multipart(prompt)):

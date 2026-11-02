@@ -27,16 +27,22 @@ the rest are future work.
 
 ## P1 — routing and accuracy
 
-- [ ] Raise ONNX NER precision above the current ~22% exact-match bar so the
-      specialist can be enabled by default.
-- [ ] Improve the sentiment specialist's coverage without lowering precision:
-      handle negation scopes ("not bad"), quoted praise, and mixed reviews more
-      systematically. The cue regexes now use word boundaries, but a small
-      negation-aware layer would be better.
-- [ ] Add a router confidence score and route low-confidence prompts to cloud
-      instead of silently falling back to `factual`.
-- [ ] Expand the paraphrase test set (the router was hardened on 64 prompts;
-      add a versioned, growing suite).
+- [x] Raise ONNX NER precision above the current ~22% exact-match bar so the
+      specialist can be enabled by default. The post-processor now reconciles
+      the model's four-class output with the task's six types, gates every
+      token on confidence/margin, and escalates unless every capitalized span
+      and date is covered. NER is on by default (`NER_SPECIALIST=off` disables).
+- [x] Improve the sentiment specialist's coverage without lowering precision:
+      negation scopes ("not bad" / "not great"), quoted marketing copy versus
+      endorsed praise, and two-sided reviews are handled explicitly. Contrast
+      only forces escalation when evidence is on both sides or neither side.
+- [x] Add a router confidence score and route low-confidence prompts to cloud
+      instead of silently falling back to `factual`. `route()` keeps its
+      2-tuple contract; `route_with_confidence()` exposes the score and forces
+      cloud below `ROUTER_MIN_CONFIDENCE` (default `0.70`).
+- [x] Expand the paraphrase test set into a versioned, growing suite:
+      `eval/router_paraphrases_v1.json` has 64 prompts across all categories,
+      and `tests/test_paraphrases.py` discovers every `v*.json` automatically.
 - [ ] Add regression tests for the multipart-math detector, including
       "and the" prose that caused the v16 token regression.
 - [ ] Measure whether a small classifier beats the lexical router on the real
@@ -143,7 +149,9 @@ the rest are future work.
 
 - The sentiment specialist has no neutral class; neutral reviews are escalated
   by design.
-- The ONNX NER specialist is disabled by default because of measured precision.
+- The ONNX NER specialist is enabled by default but remains precision-gated:
+  missing weights, uncertain tokens, MISC spans without a lexical cue, or any
+  uncovered capitalized span/date all escalate to cloud.
 - Local generative inference is only useful on hosts above the per-category
   speed bars; the historical grader was slower than the original thresholds.
 - The dev judge is an LLM and is not fully deterministic.
