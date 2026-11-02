@@ -17,7 +17,7 @@ dependencies = [
 [project.optional-dependencies]
 local = ["llama-cpp-python"]
 specialists = ["numpy", "onnxruntime", "tokenizers"]
-dev = ["pytest", "pytest-cov", "ruff", "pre-commit"]
+dev = ["numpy", "pytest", "pytest-cov", "ruff", "pre-commit"]
 finetune = [
     "transformers>=4.45",
     "trl>=0.12",
