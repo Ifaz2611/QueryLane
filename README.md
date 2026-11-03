@@ -101,6 +101,9 @@ pre-commit install  # enable ruff + secret scanning before each commit
 ```bash
 pip install -e ".[finetune]"
 ```
+The dataset/validation/dedupe/training pipeline is documented in
+[`finetune/README.md`](finetune/README.md); start with
+`python -m finetune.validate_data` before any training run.
 
 ### Configuration
 
@@ -344,7 +347,7 @@ QueryLane is a research/competition codebase, not a hosted service. The historic
 - The ONNX NER specialist is enabled by default but remains precision-gated: uncertain tokens, MISC spans without a cue, and incomplete entity coverage escalate to cloud
 - Local generative inference is only useful on hosts above per-category speed thresholds
 - The development judge uses an LLM and is not fully deterministic
-- Training datasets `train_all.jsonl` and `train_round2.jsonl` have overlap that needs deduplication
+- `train_all.jsonl` and `train_round2.jsonl` are the same rows in different order; `train_dedup.jsonl` (2,775 rows) is the canonical deduplicated training file, and its two invalid rows are documented in [`finetune/README.md`](finetune/README.md)
 
 ## Contributing
 

@@ -5,11 +5,17 @@ on an MI300X: roughly 15-30 minutes of compute.
 
 ## 1. Upload the training assets
 
-Upload these files through the Jupyter file browser into `/workspace/ft/`:
+Upload these files through the Jupyter file browser into `/workspace/ft/`
+(keep the layout: the `finetune/` and `agent/` folders as-is — the training
+scripts import sibling modules and the shared system prompts from
+`agent.local`; only the small `.py` files are needed, no weights):
 
 - `finetune/train.py`
-- `finetune/convert.sh`
-- `finetune/data/train_all.jsonl` (generated locally; ~3,000 rows)
+- `finetune/eval_split.py`
+- `finetune/validate_data.py`
+- `agent/` (the folder)
+- `finetune/data/train_dedup.jsonl` (canonical, deduplicated; generated
+  locally — see `finetune/README.md`)
 
 ## 2. Install dependencies (once per pod restart)
 
@@ -21,21 +27,32 @@ Torch with ROCm is already on the pod (vllm works there, per the FAQ).
 
 ## 3. Train (LoRA, ~minutes on MI300X)
 
+`train.py` holds out a deterministic, category-stratified validation split
+(5% by default, `--val-frac`), evaluates every epoch on it, and after
+training reports PER-CATEGORY held-out loss plus deterministic
+judge-free accuracy metrics into `<out>/val_metrics.json` (also
+`train_manifest.json` with model/data/args provenance):
+
 ```bash
 cd /workspace/ft
-python train.py --model Qwen/Qwen2.5-3B-Instruct --data train_all.jsonl --out /workspace/ft-qwen3b
+python train.py --model Qwen/Qwen2.5-3B-Instruct --data train_dedup.jsonl --out /workspace/ft-qwen3b
 ```
+
+(Fine from inside /workspace/ft, or run `python -m finetune.train ...` from
+the folder above if you kept the package layout; also fine on the laptop.)
 
 Also worth training the small variant in parallel or after (faster on the
 slow grader; we will pick by local evaluation):
 
 ```bash
-python train.py --model Qwen/Qwen2.5-1.5B-Instruct --data train_all.jsonl --out /workspace/ft-qwen15b
+python train.py --model Qwen/Qwen2.5-1.5B-Instruct --data train_dedup.jsonl --out /workspace/ft-qwen15b
 ```
 
-If your compute window ends mid-run, restart later with `--resume`
-(checkpoints are saved each epoch under `--out`, which is on /workspace
-persistent storage).
+Grab `val_metrics.json` next to the checkpoints when the run finishes; the
+per-category loss/accuracy table is the deterministic selection signal (the
+dev judge is noisy). If your compute window ends mid-run, restart later
+with `--resume` (checkpoints are saved each epoch under `--out`, which is
+on /workspace persistent storage).
 
 ## 4. Merge + convert + quantize
 

@@ -67,17 +67,41 @@ the rest are future work.
       the combined training file.
 - [x] Reject neutral sentiment rows that carry praise/complaint quotes, and NER
       rows with empty entity text.
-- [ ] Add a data validation script that checks every JSONL row (schema,
+- [x] Add a data validation script that checks every JSONL row (schema,
       category, verbatim quotes/entities, math expression correctness, summary
-      length constraints) before training.
-- [ ] Deduplicate near-identical prompts across `train_all` and `train_round2`
+      length constraints) before training. `finetune/validate_data.py` also
+      checks system-prompt skew against `agent.local`, hallucinated numbers in
+      summaries, and duplicate prompts; it exits 1 on failure. Found 2 real
+      errors + 9 warnings in the shipped data on its first run.
+- [x] Deduplicate near-identical prompts across `train_all` and `train_round2`
       and document the difference between the two files.
-- [ ] Add a held-out validation split and report per-category loss/accuracy;
+      `finetune/dedupe_data.py` (exact + near via difflib, `--drop-near`,
+      `--drop-invalid`) writes `data/train_dedup.jsonl` (2,775 rows) and
+      `data/dedupe_report.json`. Finding: the two files are the SAME 2,819
+      rows in different order (identical multiset); each carried 8 duplicate
+      prompts that the old 120-char-prefix generator key missed. Documented
+      in `finetune/README.md`.
+- [x] Add a held-out validation split and report per-category loss/accuracy;
       current evaluation is judge-based and noisy.
-- [ ] Make dataset generation reproducible (seed the generator calls and record
+      `finetune/train.py --val-frac 0.05` (deterministic, stratified,
+      leakage-safe via normalized-prompt grouping) + `finetune/eval_split.py`
+      (assistant-token-masked per-category loss and deterministic scorer:
+      label accuracy, span F1, constraint compliance, expression-value
+      accuracy, token F1) → `<out>/val_metrics.json`.
+- [x] Make dataset generation reproducible (seed the generator calls and record
       the model/version used).
-- [ ] Investigate the optional Qwen3.5 candidate in `colab_unsloth.ipynb`; verify
+      `gen_data.py` now has `--seed/--model/--temperature`, seeds per-call RNGs
+      plus the API `seed` field, dedupes on the normalized prompt, and writes
+      `data/gen_manifest.json` (generator file hash, model id, params, row
+      counts, output file hashes — never the API key).
+- [x] Investigate the optional Qwen3.5 candidate in `colab_unsloth.ipynb`; verify
       the model id exists before relying on it.
+      `unsloth/Qwen3.5-2B-Instruct` does NOT exist (Repository-not-found;
+      absent from unsloth's Qwen3.5 catalog). Verified replacements:
+      `Qwen/Qwen3.5-2B` and `unsloth/Qwen3.5-2B` (canonical ids, ~3.4M
+      downloads, multimodal `Qwen3_5ForConditionalGeneration` — see caveat).
+      The notebook now uses `unsloth/Qwen3.5-2B` behind a Hub-existence guard;
+      full verification log in `finetune/README.md`.
 
 ## P1 — reliability and observability
 
@@ -161,5 +185,8 @@ the rest are future work.
 - Local generative inference is only useful on hosts above the per-category
   speed bars; the historical grader was slower than the original thresholds.
 - The dev judge is an LLM and is not fully deterministic.
-- `train_all.jsonl` and `train_round2.jsonl` overlap; the relationship should be
-  documented and deduplicated.
+- `train_all.jsonl` and `train_round2.jsonl` are the same 2,819 rows in
+  different order (documented in `finetune/README.md` and
+  `data/dedupe_report.json`); the canonical deduplicated training file is
+  `data/train_dedup.jsonl` (2,775 rows after dropping 2 invalid rows,
+  8 duplicate prompts, and 34 near-duplicate rows).

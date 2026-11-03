@@ -13,23 +13,36 @@ Training pairs embed the EXACT system prompts the agent uses at inference
 
 Usage:
     set -a; source .env; set +a
-    python -m finetune.gen_data --per-category 600         # full run
-    python -m finetune.gen_data --per-category 30 --pilot  # quick pilot
+    python -m finetune.gen_data --per-category 600 --seed 42  # full run
+    python -m finetune.gen_data --per-category 30 --pilot     # quick pilot
+
+Reproducibility: every generator call is seeded (a deterministic per-call
+local RNG for prompt construction plus a 'seed' field on the API request)
+and a manifest recording the generator file hash, python version, model id,
+parameters and the sha256 of every output file is written to
+data/gen_manifest.json. The provider may still not be bit-deterministic at
+temperature 0.9; the manifest plus finetune.validate_data make any drift
+between regeneration runs detectable.
 """
 
 import argparse
+import hashlib
 import json
 import os
+import platform
 import random
 import re
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+from urllib.parse import urlsplit
 
 from openai import OpenAI
 
 from agent import pal
 from agent.local import _LOCAL_SYSTEM
+from finetune.validate_data import normalize_prompt
 
 OUT_DIR = os.path.join(os.path.dirname(__file__), "data")
 ITEMS_PER_CALL = 10
@@ -81,7 +94,8 @@ _SENTIMENT_LABELS = ("positive", "negative", "mixed", "neutral")
 _MATH_SYSTEM = _LOCAL_SYSTEM["math"]
 
 
-def _gen_prompt(category: str, seed: str, k: int) -> str:
+def _gen_prompt(category: str, seed: str, k: int, rng=None) -> str:
+    rng = rng if rng is not None else random
     if category == "sentiment":
         return f"""Create {k} short product/service reviews about {seed} for a sentiment-classification dataset.
 Vary length (1-3 sentences) and difficulty. Include at least: 2 clearly positive, 2 clearly negative,
@@ -99,7 +113,7 @@ invented names. Return STRICT JSON: array of {k} objects {{"sentence": str, "ent
 "type": one of Person/Organization/Location/Date/Event/Product}}]}}. Entities must appear verbatim in
 the sentence. Treaties, agreements and summits are Event. Countries and cities are Location. No other text."""
     if category == "summarization":
-        constraint = random.choice(_SUMM_CONSTRAINTS[:2] + _SUMM_CONSTRAINTS[3:5])
+        constraint = rng.choice(_SUMM_CONSTRAINTS[:2] + _SUMM_CONSTRAINTS[3:5])
         return f"""Create {k} passages (60-100 words each) about {seed}, each with 2-4 concrete numeric facts.
 For each passage, work in this order:
 1. "key_numbers": list the 2-4 numeric strings a grader would require (write them exactly as in the passage, e.g. ["46 million", "7", "12%"]).
@@ -253,11 +267,80 @@ _SEEDS = {
 }
 
 
+def _sha256_file(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _generator_identity() -> dict:
+    """Who produced this dataset: the generator file's own hash + interpreter."""
+    return {
+        "file": os.path.basename(__file__),
+        "sha256": _sha256_file(__file__),
+        "python": platform.python_version(),
+        "platform": platform.platform(),
+    }
+
+
+def _pick_model(allowed: list, requested: str = "") -> str:
+    """Model id resolution: explicit --model wins, then the kimi entry."""
+    if requested:
+        return requested
+    return next((m for m in allowed if "kimi" in m.lower()), allowed[0] if allowed else "")
+
+
+def _output_digests(out_dir: str) -> dict:
+    digests = {}
+    for name in sorted(os.listdir(out_dir)):
+        if not name.endswith(".jsonl"):
+            continue
+        path = os.path.join(out_dir, name)
+        digests[name] = {"sha256": _sha256_file(path), "bytes": os.path.getsize(path)}
+    return digests
+
+
+def _write_manifest(out_dir: str, model: str, base_url: str, args, counts: dict, total_rows: int, tokens_spent: int) -> str:
+    """Write data/gen_manifest.json: the reproducibility record for this run."""
+    manifest = {
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "generator": _generator_identity(),
+        "model": {"id": model, "base_url_host": urlsplit(base_url).netloc},
+        "params": {
+            "per_category": args.per_category,
+            "categories": args.categories,
+            "temperature": args.temperature,
+            "items_per_call": ITEMS_PER_CALL,
+            "seed": args.seed,
+            "api_seed_namespace": f"api:{args.seed}",
+            "note": "provider-side nondeterminism at temperature>0 is possible; "
+            "use finetune.validate_data after every regeneration",
+        },
+        "rows_kept": counts,
+        "total_rows": total_rows,
+        "generator_tokens_spent": tokens_spent,
+        "outputs": _output_digests(out_dir),
+    }
+    path = os.path.join(out_dir, "gen_manifest.json")
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(manifest, fh, indent=2)
+    return path
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--per-category", type=int, default=600)
     parser.add_argument("--categories", default="sentiment,ner,summarization,factual,math")
     parser.add_argument("--pilot", action="store_true", help="print samples")
+    parser.add_argument(
+        "--seed", type=int, default=42, help="seeds per-call prompt RNGs and the API 'seed' request field"
+    )
+    parser.add_argument(
+        "--model", default="", help="generator model id (default: the kimi entry in ALLOWED_MODELS)"
+    )
+    parser.add_argument("--temperature", type=float, default=0.9)
     args = parser.parse_args()
 
     categories = [c.strip() for c in args.categories.split(",") if c.strip()]
@@ -271,19 +354,26 @@ def main():
         timeout=120.0,
     )
     allowed = [m.strip() for m in os.environ["ALLOWED_MODELS"].split(",") if m.strip()]
-    if not allowed:
-        parser.error("ALLOWED_MODELS must name at least one model")
-    model = next((m for m in allowed if "kimi" in m.lower()), allowed[0])
+    if not allowed and not args.model:
+        parser.error("ALLOWED_MODELS must name at least one model (or pass --model)")
+    model = _pick_model(allowed, args.model)
+    print(f"generator model: {model} | seed: {args.seed} | temperature: {args.temperature}", flush=True)
     os.makedirs(OUT_DIR, exist_ok=True)
     tokens_lock = threading.Lock()
     tokens = {"n": 0}
+    counts = {}
 
-    def one_call(category: str, seed: str) -> list:
+    def one_call(category: str, seed: str, call_index: int) -> list:
+        # Deterministic per-call RNG for prompt construction (topic order,
+        # summarization constraint choice) plus a deterministic API-side seed.
+        call_rng = random.Random(f"{args.seed}:{category}:{call_index}")
+        api_seed = random.Random(f"api:{args.seed}:{category}:{call_index}").randrange(2**31 - 1)
         response = client.chat.completions.create(
             model=model,
-            messages=[{"role": "user", "content": _gen_prompt(category, seed, ITEMS_PER_CALL)}],
-            temperature=0.9,
+            messages=[{"role": "user", "content": _gen_prompt(category, seed, ITEMS_PER_CALL, call_rng)}],
+            temperature=args.temperature,
             max_tokens=4000,
+            seed=api_seed,
             extra_body={"reasoning_effort": "none"},
         )
         usage = getattr(response, "usage", None)
@@ -309,12 +399,16 @@ def main():
     for category in categories:
         seeds = _SEEDS[category]
         calls_needed = max(1, args.per_category // ITEMS_PER_CALL)
-        jobs = [(category, seeds[i % len(seeds)]) for i in range(calls_needed)]
+        jobs = [(category, seeds[i % len(seeds)], i) for i in range(calls_needed)]
         rows, seen = [], set()
         with ThreadPoolExecutor(max_workers=6) as pool:
             for batch in pool.map(lambda j: one_call(*j), jobs):
                 for row in batch:
-                    key = row["messages"][1]["content"][:120]
+                    # Normalized full-prompt key (case/punctuation-insensitive).
+                    # The old raw 120-char-prefix key let apostrophe/case
+                    # variants of the same question through (8 rows in the
+                    # shipped data).
+                    key = normalize_prompt(row["messages"][1]["content"])
                     if key not in seen:
                         seen.add(key)
                         rows.append(row)
@@ -323,6 +417,7 @@ def main():
             for row in rows:
                 fh.write(json.dumps(row, ensure_ascii=False) + "\n")
         kept = len(rows)
+        counts[category] = kept
         print(f"{category}: kept {kept} validated rows -> {path}", flush=True)
         if args.pilot and rows:
             sample = random.choice(rows)
@@ -339,12 +434,16 @@ def main():
             continue
         with open(path, encoding="utf-8") as fh:
             all_rows.extend(json.loads(line) for line in fh if line.strip())
-    random.Random(42).shuffle(all_rows)
+    random.Random(args.seed).shuffle(all_rows)
     combined = os.path.join(OUT_DIR, "train_all.jsonl")
     with open(combined, "w", encoding="utf-8") as fh:
         for row in all_rows:
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
     print(f"TOTAL {len(all_rows)} rows -> {combined}; generator tokens spent: {tokens['n']}")
+    manifest_path = _write_manifest(
+        OUT_DIR, model, os.environ["FIREWORKS_BASE_URL"], args, counts, len(all_rows), tokens["n"]
+    )
+    print("wrote", manifest_path)
     return 0
 
 
