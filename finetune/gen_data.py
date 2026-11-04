@@ -41,6 +41,7 @@ from urllib.parse import urlsplit
 from openai import OpenAI
 
 from agent import pal
+from agent.cloud import response_text, usage_totals
 from agent.local import _LOCAL_SYSTEM
 from finetune.validate_data import normalize_prompt
 
@@ -376,13 +377,13 @@ def main():
             seed=api_seed,
             extra_body={"reasoning_effort": "none"},
         )
-        usage = getattr(response, "usage", None)
-        if usage and usage.total_tokens:
+        usage_total = usage_totals(getattr(response, "usage", None))["total"]
+        if usage_total:
             with tokens_lock:
-                tokens["n"] += usage.total_tokens
-        if not response.choices:
+                tokens["n"] += usage_total
+        text = response_text(response)
+        if not text:
             return []
-        text = (response.choices[0].message.content or "").strip()
         text = re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.MULTILINE).strip()
         try:
             items = json.loads(text)

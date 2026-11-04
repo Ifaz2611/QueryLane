@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from openai import OpenAI
 
-from agent.cloud import CloudClient
+from agent.cloud import CloudClient, _strip_thinking, response_text, usage_totals
 from agent.main import answer_task
 from eval.dashboard import build_dashboard
 
@@ -82,13 +82,13 @@ class Judge:
             temperature=0,
             max_tokens=1500,
         )
-        usage = getattr(response, "usage", None)
-        if usage is not None and usage.total_tokens:
+        usage_total = usage_totals(getattr(response, "usage", None))["total"]
+        if usage_total:
             with self._lock:
-                self.tokens += usage.total_tokens
-        if not response.choices:
+                self.tokens += usage_total
+        text = _strip_thinking(response_text(response))
+        if not text:
             return False, "empty judge response"
-        text = (response.choices[0].message.content or "").strip()
         if "</think>" in text:
             text = text.split("</think>", 1)[1].strip()
         lines = text.splitlines()

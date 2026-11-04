@@ -105,21 +105,35 @@ the rest are future work.
 
 ## P1 — reliability and observability
 
-- [ ] Add structured JSON logging with task id, category, lane, elapsed time,
+- [x] Add structured JSON logging with task id, category, lane, elapsed time,
       and token usage. `AGENT_DEBUG` is useful but ad hoc.
-- [ ] Export per-run metrics (tokens by category, lane counts, escalations,
+      `agent/obs.py` (`AGENT_LOG_JSON=1`) emits one JSON line per event; task
+      lines carry task id, category, lane, confidence, elapsed time, and tokens.
+- [x] Export per-run metrics (tokens by category, lane counts, escalations,
       empty answers) so regressions are visible without reading logs.
+      `METRICS_PATH=<file>` writes `agent/obs.RunMetrics` counters; escalations,
+      empty answers, low-confidence routes, duplicates, retries, and per-task
+      cloud-budget hits are all included.
 - [x] Make `_time_spent` updates thread-safe in `agent/local.py` and add a lock
       around the budget counters (`_budget_lock`).
-- [ ] Add explicit backoff/jitter for connection errors and 5xx responses in
+- [x] Add explicit backoff/jitter for connection errors and 5xx responses in
       `agent/cloud.py`; currently 5xx retries are immediate.
-- [ ] Add a hard per-task cloud time budget so one slow call cannot consume the
-      global deadline.
-- [ ] Handle `response.choices == []` and malformed usage objects in all cloud
+      Equal-jitter exponential backoff (`CLOUD_BACKOFF_BASE`/`CLOUD_BACKOFF_CAP`)
+      now covers connection errors, timeouts, 429s, and 5xx; the final attempt
+      never sleeps and every delay is clipped to the remaining task budget.
+- [x] Add a hard per-task cloud time budget so one slow call cannot consume the
+      global deadline. `CLOUD_TASK_BUDGET` (default 75s) bounds one `answer()`
+      call across models and retries; exceeding it escalates instead of hanging.
+- [x] Handle `response.choices == []` and malformed usage objects in all cloud
       call sites (partially handled in `agent/cloud.py`).
-- [ ] Add graceful handling for duplicate `task_id` values in the input batch.
-- [ ] Add a `--dry-run` mode that routes and reports lanes without calling the
-      cloud.
+      `cloud.response_text()`/`cloud.usage_totals()` are now the single path for
+      the agent, `eval/judge.py`, and `finetune/gen_data.py`.
+- [x] Add graceful handling for duplicate `task_id` values in the input batch.
+      Duplicates are answered once, echoed to every row in input order, and
+      counted in the metrics snapshot.
+- [x] Add a `--dry-run` mode that routes and reports lanes without calling the
+      cloud. Also `AGENT_DRY_RUN=1`; reports the predicted lane per task and
+      writes empty answers without creating a cloud client.
 
 ## P1 — evaluation
 

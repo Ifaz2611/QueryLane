@@ -258,7 +258,35 @@ export AGENT_DEBUG=1
 python -m agent.main
 ```
 
-This will log token usage and routing decisions for each task.
+This logs token usage and routing decisions for each task.
+
+### Structured Logs and Metrics
+
+For machine-readable output, ask for JSON events and a metrics snapshot:
+
+```bash
+# macOS/Linux
+AGENT_LOG_JSON=1 METRICS_PATH=metrics.json python -m agent.main
+
+# Windows PowerShell
+$env:AGENT_LOG_JSON="1"; $env:METRICS_PATH="metrics.json"; python -m agent.main
+```
+
+`AGENT_LOG_JSON` prints one JSON object per task (`task_id`, `category`,
+`lane`, `confidence`, `elapsed_seconds`, `tokens`) plus cloud retry, budget, and
+run-summary events. `METRICS_PATH` writes a single JSON file with tokens by
+category, lane counts, escalations, empty answers, and duplicate counts — check
+it after each run so a regression is visible without reading logs.
+
+### Dry Run Before Spending Tokens
+
+```bash
+python -m agent.main --dry-run        # or: AGENT_DRY_RUN=1 python -m agent.main
+```
+
+Every task is routed and its predicted lane (`cloud`, `specialist`, `local`) is
+reported, but no cloud or local model call is made. Results contain empty
+answers, so use it to sanity-check router or `LOCAL_CATEGORIES` changes.
 
 ## Setting Up Local Specialists
 

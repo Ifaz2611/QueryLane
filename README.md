@@ -170,6 +170,20 @@ export RESULTS_PATH="testio/output_dev/results.json"
 python -m agent.main
 ```
 
+#### Dry Run (no tokens spent)
+
+Route a batch and report the lane each task would take without calling the
+cloud or loading the local model. Useful for checking a router or
+`LOCAL_CATEGORIES` change before spending anything:
+
+```bash
+python -m agent.main --dry-run      # or AGENT_DRY_RUN=1 python -m agent.main
+```
+
+Each task is logged with its category, confidence, and predicted lane
+(`cloud`, `specialist`, or `local`). The output file still contains every
+`task_id` with an empty `answer`, and the process exits 0.
+
 #### Input Format
 
 Tasks should be provided as a JSON array:
@@ -203,6 +217,17 @@ Results are returned as a JSON array:
   }
 ]
 ```
+
+Notes on the contract:
+
+- Every input `task_id` gets exactly one output row, in input order, even when a
+  task fails.
+- A `task_id` that appears more than once in the input is answered once and
+  every row for it receives that answer (billed work is never repeated). The
+  count of repeats is written to `METRICS_PATH` and logged when JSON logging is
+  on.
+- A missing or `null` prompt, or a non-string prompt, is treated as an empty
+  prompt and routed to cloud.
 
 ### Evaluation
 
@@ -248,6 +273,52 @@ This replays validated synthetic datasets through ONNX specialists and reports c
 | `NER_COMPLETENESS_GUARD` | `on` | Escalate unless every capitalized span and date is covered |
 | `ROUTER_MIN_CONFIDENCE` | `0.70` | Send lower-confidence routes directly to cloud |
 | `AGENT_DEBUG` | unset | Enable per-call token usage logging |
+| `AGENT_LOG_JSON` | unset | Emit one structured JSON log line per task/cloud call |
+| `AGENT_DRY_RUN` | unset | Same as `--dry-run`: route and report without calling the cloud |
+| `METRICS_PATH` | unset | Write a per-run metrics JSON snapshot (tokens by category, lane counts, escalations, empty answers) |
+| `CLOUD_TASK_BUDGET` | `75` | Hard per-task cloud time budget in seconds |
+| `CLOUD_BACKOFF_BASE` | `0.5` | Base delay in seconds for transient-error retries |
+| `CLOUD_BACKOFF_CAP` | `8.0` | Maximum backoff delay per retry |
+
+### Observability
+
+Both outputs are off by default so a graded run stays quiet.
+
+**Structured logs** — `AGENT_LOG_JSON=1` prints one JSON object per event:
+
+```json
+{"ts": 1730000000.12, "level": "info", "event": "task", "task_id": "practice-02",
+ "category": "math", "lane": "local", "confidence": 0.86, "predicted_lane": "local",
+ "elapsed_seconds": 12.4, "tokens": 0, "empty_answer": false}
+```
+
+Event types are `task`, `cloud_call`, `cloud_retry`, `cloud_budget_exceeded`,
+`task_abandoned`, `duplicate_task_ids`, `dry_run`, and `run_summary`.
+`AGENT_DEBUG=1` still prints the human-readable per-call token lines.
+
+**Per-run metrics** — `METRICS_PATH=metrics.json` writes a snapshot after the
+results file:
+
+```json
+{
+  "tasks": 40,
+  "lanes": {"cloud": 22, "specialist": 14, "local": 3, "escalated": 1},
+  "categories": {"factual": 12, "sentiment": 14, "math": 9, "ner": 5},
+  "escalations": {"escalated": 1},
+  "empty_answers": 0,
+  "low_confidence_routes": 4,
+  "duplicates": {"repeated_task_ids": 0, "skipped_rows": 0},
+  "missing_prompts": 0,
+  "tokens": {"total": 4210, "by_category": {"factual": 3100, "math": 1110}, "per_task": 105.25},
+  "cloud": {"calls": 22, "tokens": 4210, "retries": 1, "empty_responses": 0,
+            "budget_exceeded": 0, "tokens_by_category": {"factual": 3100, "math": 1110}},
+  "elapsed_seconds": 91.3
+}
+```
+
+Lane counts always sum to `tasks`; `tokens.by_category` uses per-task deltas, so
+with concurrent workers it can overlap slightly — the exact billed figure is
+`cloud.tokens`.
 
 ### Fine-Tuning Performance
 
@@ -261,7 +332,7 @@ Adjust these parameters based on your hardware and workload:
 ## Repository Structure
 
 ```text
-agent/            Runtime components: router, prompts, cloud client, local model, specialists, PAL
+agent/            Runtime components: router, prompts, cloud client, local model, specialists, PAL, logging/metrics
 eval/             Development tools: judge, local benchmark, specialist precision harness, versioned router paraphrase suites
 finetune/         Fine-tuning pipeline: synthetic data generator, LoRA training, GGUF conversion, notebooks
 models/           ONNX configs and tokenizers (weights are gitignored)
@@ -309,6 +380,14 @@ Versioned Dockerfiles bundle ONNX specialists and/or GGUF weights for local infe
 - `Dockerfile.v15` - Version 15 hybrid build
 
 **Note:** Model weights are intentionally not included in the repository. See `finetune/POD_INSTRUCTIONS.md` for the complete build-and-convert workflow.
+
+### Container Flags and Limits
+
+The image entrypoint is `python -m agent.main`, so container arguments are agent
+flags — add `--dry-run` to a `docker run` to route a batch inside the image
+without calling the API (no credentials needed). The run writes
+`/output/results.json`; set `METRICS_PATH=/output/metrics.json` to keep the
+metrics snapshot next to it. Both files must be writable by uid 10001.
 
 ### Local Development Image
 
