@@ -100,6 +100,17 @@ def response_text(response) -> str:
     return _strip_thinking(content)
 
 
+def _env_float(name: str, default: float) -> float:
+    """Read a float env var, falling back to ``default`` when unset or invalid.
+
+    A typo in a tuning variable must never crash a run mid-retry.
+    """
+    try:
+        return float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
 def _backoff_delay(attempt: int, base: float, cap: float, jitter: float = 0.5) -> float:
     """Seconds to wait before retry ``attempt`` (1-based): base*2^n plus jitter.
 
@@ -308,8 +319,8 @@ class CloudClient:
         delay = min(
             _backoff_delay(
                 attempt + 1,
-                float(os.environ.get("CLOUD_BACKOFF_BASE", "0.5")),
-                float(os.environ.get("CLOUD_BACKOFF_CAP", "8.0")),
+                _env_float("CLOUD_BACKOFF_BASE", 0.5),
+                _env_float("CLOUD_BACKOFF_CAP", 8.0),
             ),
             remaining,
         )

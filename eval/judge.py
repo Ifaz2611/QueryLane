@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from openai import OpenAI
 
-from agent.cloud import CloudClient, _strip_thinking, response_text, usage_totals
+from agent.cloud import CloudClient, response_text, usage_totals
 from agent.main import answer_task
 from eval.dashboard import build_dashboard
 
@@ -86,11 +86,9 @@ class Judge:
         if usage_total:
             with self._lock:
                 self.tokens += usage_total
-        text = _strip_thinking(response_text(response))
+        text = response_text(response)
         if not text:
             return False, "empty judge response"
-        if "</think>" in text:
-            text = text.split("</think>", 1)[1].strip()
         lines = text.splitlines()
         first = lines[0].strip().upper() if lines else ""
         # Tolerate markdown decoration such as "**PASS**".

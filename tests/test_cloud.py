@@ -277,6 +277,19 @@ class CloudRetryTests(unittest.TestCase):
         self.assertEqual(text, "ok")
         self.assertLessEqual(sleep.call_args.args[0], 0.05)
 
+    def test_invalid_backoff_env_falls_back_to_defaults(self):
+        with _patched_openai_errors() as (conn, _, _, _):
+            self.client._call = mock.Mock(side_effect=[conn("down"), "ok"])
+            with mock.patch.dict(
+                os.environ,
+                {"CLOUD_BACKOFF_BASE": "notafloat", "CLOUD_BACKOFF_CAP": ""},
+            ), mock.patch.object(cloud.time, "sleep") as sleep:
+                text, _ = self.client._call_with_retries(
+                    "model-a", "system", "user", 10, "none"
+                )
+        self.assertEqual(text, "ok")
+        self.assertGreaterEqual(sleep.call_args.args[0], 0.25)
+
     def test_no_further_attempt_is_made_once_the_budget_is_spent(self):
         with _patched_openai_errors() as (conn, _, _, _):
             self.client._call = mock.Mock(side_effect=conn("down"))
