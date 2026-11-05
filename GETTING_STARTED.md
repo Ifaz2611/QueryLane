@@ -295,19 +295,26 @@ Local specialists provide zero-token inference for specific task types. Currentl
 - **Sentiment analysis** (SST-2 model, negation- and quote-aware cue gates)
 - **Named Entity Recognition** (enabled by default when the model is present)
 
-### Step 1: Download ONNX Models
+### Step 1: Download Models Automatically
 
-Model weights are not included in the repository. You'll need to obtain them:
+QueryLane includes an automated download script with cryptographic SHA-256 verification:
 
-1. Check `finetune/POD_INSTRUCTIONS.md` for training instructions
-2. Or use pre-trained models if available
-3. Place models in appropriate directories:
-   - Sentiment: `/app/models/sst2/` (or set `SST2_MODEL_DIR`)
-   - NER: `/app/models/ner/` (or set `NER_MODEL_DIR`)
+`ash
+# Download ONNX specialist models (NER and SST-2 sentiment)
+python scripts/download_models.py onnx
 
-### Step 2: Configure Paths
+# Download local GGUF models as well
+python scripts/download_models.py all
 
-Add to your `.env`:
+# Verify integrity of downloaded weights
+python scripts/download_models.py --verify-only
+`
+
+This places the verified ONNX models into models/ner/model.onnx and models/sst2/model.onnx.
+
+### Step 2: Configure Paths (Optional)
+
+By default, QueryLane automatically discovers models in the models/ directory. You can optionally customize paths in .env:
 
 ```env
 SST2_MODEL_DIR=/path/to/your/sst2/model
@@ -492,6 +499,18 @@ python -c "import onnxruntime; print('ONNX Runtime:', onnxruntime.__version__)"
 2. Decrease `AGENT_DEADLINE` to stop early
 3. Disable local model if host is slow
 4. Check network latency to Fireworks API
+
+#### Docker Multi-Architecture (amd64 / arm64) & CPU Wheel Caveat
+
+**Multi-Arch Support:**
+The cloud-only image (Dockerfile) natively builds and runs across both \linux/amd64\ and \linux/arm64\ (such as Apple Silicon or AWS Graviton) using Docker Buildx:
+\\ash
+docker buildx build --platform linux/amd64,linux/arm64 -t querylane:latest .
+\
+**CPU Wheel Caveat for \llama-cpp-python\:**
+The precompiled wheels on \betlen.github.io/llama-cpp-python/whl/cpu\ target \manylinux_x86_64\ only. When building hybrid images (\Dockerfile.local\ or \Dockerfile.phase2\) on ARM64 hosts:
+- Run under AMD64 emulation with \docker build --platform linux/amd64 ...\ (recommended), OR
+- Install \uild-essential\ and \cmake\ and remove \--only-binary=llama-cpp-python\ from the build command to compile natively.
 
 ### Getting Help
 

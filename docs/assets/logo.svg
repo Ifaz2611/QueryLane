@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 120" width="100%" height="100%">
+  <defs>
+    <linearGradient id="laneBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+    <linearGradient id="laneEmerald" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="laneAmber" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Icon Mark: 3 parallel converging/diverging lanes + route node -->
+  <g transform="translate(15, 10)">
+    <!-- Rounded Background Badge -->
+    <rect x="0" y="0" width="100" height="100" rx="22" fill="#0f172a" stroke="#1e293b" stroke-width="2"/>
+    
+    <!-- Top Lane (Fast / Rules - Blue) -->
+    <path d="M22 28 C 45 28, 55 35, 78 35" fill="none" stroke="url(#laneBlue)" stroke-width="5" stroke-linecap="round"/>
+    
+    <!-- Middle Lane (Specialist / Zero-Token - Emerald) -->
+    <path d="M22 50 C 42 50, 58 50, 78 50" fill="none" stroke="url(#laneEmerald)" stroke-width="6" stroke-linecap="round"/>
+    
+    <!-- Bottom Lane (Escalation / Cloud - Amber) -->
+    <path d="M22 72 C 45 72, 55 65, 78 65" fill="none" stroke="url(#laneAmber)" stroke-width="5" stroke-linecap="round"/>
+
+    <!-- Dynamic Flow Nodes -->
+    <circle cx="22" cy="50" r="6" fill="#38bdf8"/>
+    <circle cx="78" cy="35" r="4.5" fill="#38bdf8"/>
+    <circle cx="78" cy="50" r="5.5" fill="#34d399" filter="url(#glow)"/>
+    <circle cx="78" cy="65" r="4.5" fill="#fbbf24"/>
+  </g>
+
+  <!-- Wordmark Text -->
+  <g transform="translate(135, 68)">
+    <text font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="46" letter-spacing="-0.03em" fill="#ffffff">Query<tspan fill="#38bdf8">Lane</tspan></text>
+  </g>
+
+  <!-- Subtitle Tagline -->
+  <g transform="translate(138, 92)">
+    <text font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="600" font-size="14" letter-spacing="0.18em" text-transform="uppercase" fill="#94a3b8">COST-AWARE LLM QUERY ROUTING</text>
+  </g>
+</svg>

@@ -19,6 +19,10 @@ RUN groupadd --gid 10001 querylane \
  && chown -R querylane:querylane /app /output /home/querylane
 
 # One lock covers the local GGUF runtime and the ONNX specialist runtimes.
+# NOTE (CPU Wheel Caveat): abetlen's CPU wheel index provides prebuilt wheels
+# for linux/amd64 only. For linux/arm64 (e.g., Apple Silicon, Graviton), run under
+# amd64 emulation via `docker build --platform linux/amd64` or install build-essential/cmake
+# to compile llama-cpp-python from source.
 COPY requirements-hybrid.lock ./
 RUN pip install --no-cache-dir -r requirements-hybrid.lock \
       --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu \

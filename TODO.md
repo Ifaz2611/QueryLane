@@ -168,19 +168,32 @@ the rest are future work.
 
 - [ ] Rename the workspace folder from `LLM-Query-Route` to `querylane` when it
       is safe to do so (the internal `agent` package is intentionally kept for
-      entrypoint/import compatibility).
-- [ ] Publish `pyproject.toml` metadata (authors, URLs, license) and build a
-      wheel/sdist in CI.
-- [ ] Add a small logo/wordmark and a docs page with the lane diagram.
-- [ ] Add a `Makefile` or `justfile` for common tasks (test, lint, eval, build).
+      entrypoint/import compatibility). Safe procedure documented: requires closing
+      the IDE/agent session to release Windows directory locks; the git repository
+      itself is already `QueryLane`.
+- [x] Publish `pyproject.toml` metadata (authors, URLs, license) and build a
+      wheel/sdist in CI. PEP 621 metadata complete; CI workflow updated with
+      packaging build and `twine check` validation.
+- [x] Add a small logo/wordmark and a docs page with the lane diagram.
+      Vector logo added at `docs/assets/logo.svg` and full architecture guide with
+      Mermaid lane decision and escalation state diagrams at `docs/lanes.md`.
+- [x] Add a `Makefile` or `justfile` for common tasks (test, lint, eval, build).
+      Both `Makefile` and `justfile` added with recipes for test, coverage, lint,
+      format, secrets, eval, build, twine check, model downloads, and web demo.
 - [x] Add `ruff`/`pytest` to CI and a pre-commit configuration.
-- [ ] Add a `CHANGELOG.md` and semantic version tags.
-- [ ] Provide a model download script with checksums for the ONNX and GGUF
+- [x] Add a `CHANGELOG.md` and semantic version tags. Keep a Changelog format
+      covering v0.1.0 through v0.16.0; semantic version tag `v0.16.0` added.
+- [x] Provide a model download script with checksums for the ONNX and GGUF
       artifacts instead of documenting manual placement.
-- [ ] Add multi-arch image builds (amd64/arm64) and document the CPU wheel
-      caveat for `llama-cpp-python`.
-- [ ] Add a minimal web demo or CLI that accepts a prompt and explains the lane
-      decision.
+      `scripts/download_models.py` provides streaming downloads with SHA-256
+      checksum verification for NER, SST-2, and Qwen2.5 GGUFs.
+- [x] Add multi-arch image builds (amd64/arm64) and document the CPU wheel
+      caveat for `llama-cpp-python`. Added buildx multi-arch CI job and documented
+      the x86_64 prebuilt CPU wheel constraint across `README.md`, `GETTING_STARTED.md`,
+      and Dockerfiles.
+- [x] Add a minimal web demo or CLI that accepts a prompt and explains the lane
+      decision. Added `agent/explain.py` CLI (`querylane-explain` / `querylane --explain`)
+      and zero-dependency interactive web demo `agent/web_demo.py`.
 
 ## P2 — performance
 

@@ -10,14 +10,45 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
+authors = [
+    { name = "Ifaz Md Zahin", email = "zahin26112004@gmail.com" },
+]
+keywords = [
+    "llm",
+    "query-routing",
+    "cost-optimization",
+    "zero-token",
+    "onnx",
+    "local-llm",
+    "llama-cpp",
+    "fireworks-ai",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "openai>=1.40,<3",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Ifaz2611/QueryLane"
+Repository = "https://github.com/Ifaz2611/QueryLane.git"
+Issues = "https://github.com/Ifaz2611/QueryLane/issues"
+Documentation = "https://github.com/Ifaz2611/QueryLane#readme"
+Changelog = "https://github.com/Ifaz2611/QueryLane/blob/main/CHANGELOG.md"
+
 [project.optional-dependencies]
 local = ["llama-cpp-python"]
 specialists = ["numpy", "onnxruntime", "tokenizers"]
-dev = ["numpy", "pytest", "pytest-cov", "ruff", "pre-commit"]
+dev = ["numpy", "pytest", "pytest-cov", "ruff", "pre-commit", "build", "twine"]
 finetune = [
     "transformers>=4.45",
     "trl>=0.12",
@@ -29,6 +60,7 @@ finetune = [
 
 [project.scripts]
 querylane = "agent.main:main"
+querylane-explain = "agent.explain:main"
 
 [tool.setuptools]
 packages = ["agent"]

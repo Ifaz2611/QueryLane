@@ -47,6 +47,14 @@ _ARG_PARSER.add_argument(
     action="store_true",
     help="route every task and report lanes without any cloud or local call",
 )
+_ARG_PARSER.add_argument(
+    "--explain",
+    type=str,
+    nargs="?",
+    const="",
+    default=None,
+    help="explain the lane decision for a prompt and exit",
+)
 
 
 def _remaining() -> float:
@@ -290,6 +298,17 @@ def main(argv=None) -> int:
     if _wants_help(argv):
         _print_usage()
         return 0
+    raw_args = sys.argv[1:] if argv is None else argv
+    try:
+        parsed, _ = _ARG_PARSER.parse_known_args(raw_args)
+        if getattr(parsed, "explain", None) is not None:
+            from agent.explain import explain_decision, format_explanation
+
+            info = explain_decision(parsed.explain)
+            print(format_explanation(info))
+            return 0
+    except SystemExit:
+        pass
     dry_run, _argv = _parse_args(argv)
     # Read paths at call time so tests and embedders can override them without
     # reloading the module (the container still gets the /input defaults).
@@ -446,15 +465,16 @@ def _print_usage(stream=None) -> None:
     """Print the entrypoint's usage, switches, and main env vars."""
     stream = stream or sys.stdout
     print(
-        "usage: querylane [-h] [--dry-run]\n"
+        "usage: querylane [-h] [--dry-run] [--explain [PROMPT]]\n"
         "\n"
         "Route each task in TASKS_PATH to the cheapest lane that can answer it and\n"
         "write answers to RESULTS_PATH.\n"
         "\n"
         "options:\n"
-        "  -h, --help  show this message and exit\n"
-        "  --dry-run   route every task and report lanes without any cloud or\n"
-        "              local call (also AGENT_DRY_RUN=1)\n"
+        "  -h, --help            show this message and exit\n"
+        "  --dry-run             route every task and report lanes without any cloud or\n"
+        "                        local call (also AGENT_DRY_RUN=1)\n"
+        "  --explain [PROMPT]    explain the routing and lane decision for a prompt and exit\n"
         "\n"
         "observability:\n"
         "  AGENT_LOG_JSON=1     one JSON event per task/cloud call\n"

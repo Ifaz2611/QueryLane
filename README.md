@@ -1,6 +1,9 @@
-# QueryLane
+<div align="center">
+  <img src="docs/assets/logo.svg" alt="QueryLane Logo" width="500"/>
+  <p><strong>Cost-aware LLM query routing: zero-token specialists, local models, and cloud fallback.</strong></p>
+</div>
 
-**Cost-aware LLM query routing.** QueryLane intelligently routes each query through a hierarchy of processing lanes, always choosing the cheapest option that can provide a correct answer. It prioritizes deterministic rules and zero-token local specialists before falling back to cloud LLMs only when necessary.
+QueryLane intelligently routes each query through a hierarchy of processing lanes, always choosing the cheapest option that can provide a correct answer. It prioritizes deterministic rules and zero-token local specialists before falling back to cloud LLMs only when necessary.
 
 QueryLane was originally developed as a Track 1 submission for a competition where the scoring metric was Fireworks token usage, subject to an 80% accuracy gate. The routing methodology is general-purpose: classify the request, spend nothing when a specialist is confident, and escalate on doubt rather than risk an incorrect answer.
 
@@ -12,8 +15,11 @@ QueryLane was originally developed as a Track 1 submission for a competition whe
 - **Local model support**: Optional GGUF model for factual, math, and NER queries with automatic speed calibration
 - **Cost optimization**: Terse system prompts and minimal retries to reduce token usage
 - **Safety-first**: Precision-focused specialists that escalate rather than guess
+- **Interactive Explainer & Web Demo**: CLI and zero-dependency web interface explaining routing decisions
 
 ## Architecture
+
+> 📖 **Full Architecture Guide**: See [docs/lanes.md](docs/lanes.md) for the complete Mermaid decision flowchart, escalation state diagram, and category mechanics.
 
 QueryLane uses a multi-lane routing strategy that processes queries in order of increasing cost:
 
@@ -401,6 +407,40 @@ The base image is pinned by manifest digest and runtime dependencies are
 installed from `requirements.lock` with `--require-hashes`; hybrid images use
 `requirements-hybrid.lock`. This makes image rebuilds reproducible.
 
+### Multi-Architecture Builds (amd64 / arm64)
+
+The cloud-only image supports both `linux/amd64` and `linux/arm64` (e.g. AWS Graviton, Apple Silicon) architectures out of the box. Build multi-arch images with `docker buildx`:
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 -t querylane:latest .
+```
+
+#### ⚠️ CPU Wheel Caveat for `llama-cpp-python` (Hybrid / Local Images)
+
+The prebuilt CPU wheel index configured in `Dockerfile.local` and `Dockerfile.phase2` (`https://abetlen.github.io/llama-cpp-python/whl/cpu`) hosts precompiled wheels **only for x86_64 (`linux/amd64`)**.
+
+If building hybrid or local images on an **ARM64** machine (e.g., Apple Silicon M1/M2/M3 or AWS Graviton):
+1. **Emulation (Recommended)**: Build using `--platform linux/amd64`:
+   ```bash
+   docker build --platform linux/amd64 -f Dockerfile.local -t querylane-local .
+   ```
+2. **Native Source Build**: Alternatively, install `build-essential` and `cmake` inside the container and remove the `--only-binary=llama-cpp-python` flag to compile `llama-cpp-python` directly against ARM64 NEON instructions.
+
+### Automated Model Artifact Downloads
+
+Rather than manually downloading and copying weights, QueryLane includes a download script with cryptographic SHA-256 verification:
+
+```bash
+# Download ONNX specialist models (NER and SST-2 sentiment)
+python scripts/download_models.py onnx
+
+# Download local GGUF models as well
+python scripts/download_models.py all
+
+# Verify integrity of downloaded weights
+python scripts/download_models.py --verify-only
+```
+
 ### Hybrid Images
 
 Versioned Dockerfiles bundle ONNX specialists and/or GGUF weights for local inference:
@@ -411,7 +451,20 @@ Versioned Dockerfiles bundle ONNX specialists and/or GGUF weights for local infe
 - `Dockerfile.v14` - Version 14 hybrid build
 - `Dockerfile.v15` - Version 15 hybrid build
 
-**Note:** Model weights are intentionally not included in the repository. See `finetune/POD_INSTRUCTIONS.md` for the complete build-and-convert workflow.
+### Interactive Lane Explainer & Web Demo
+
+Inspect routing, confidence gates, and predicted execution lanes for any query:
+
+```bash
+# Terminal CLI
+querylane-explain "Identify the founders: Steve Jobs and Steve Wozniak started Apple."
+
+# Alternatively via agent module
+python -m agent.explain "Calculate 25 * 40 - 150"
+
+# Interactive Web Interface (Zero dependencies)
+python -m agent.web_demo --port 8000
+```
 
 ### Container Flags and Limits
 
