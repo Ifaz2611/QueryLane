@@ -234,12 +234,44 @@ Notes on the contract:
 #### Run the Development Judge
 
 ```bash
-python -m eval.judge
+python -m eval.judge                              # deterministic + LLM, 3 runs
 python -m eval.judge --category math
 python -m eval.judge --answers eval/results_dev.json   # re-judge saved answers
+python -m eval.judge --answers eval/results_dev.json --grader deterministic  # offline
+python -m eval.judge --grader llm --runs 5        # historical all-LLM behavior
 ```
 
-The judge uses a Fireworks LLM call (tokens tracked separately from the routed agent's score).
+Grading is deterministic-first. `eval/checks_dev.json` supplies mechanical
+checks (exact labels, sentence/word counts, entity sets, numbers, code
+structure) for 35 of the 40 dev tasks, so only the code categories reach the
+LLM judge by default. `--grader hybrid` (default) uses a deterministic verdict
+when one is available and falls back to the LLM otherwise; `deterministic`
+fails undecided tasks instead of calling out; `llm` reproduces the old
+all-LLM behavior.
+
+`--runs N` (default 3) repeats judging and reports per-task flip counts plus
+per-run accuracy mean, standard deviation, and range. The report is written to
+`eval/judge_variance.json` and embedded in the dashboard alongside the
+per-category accuracy/token table.
+
+The LLM judge uses a Fireworks call (tokens tracked separately from the routed
+agent's score) and defaults to the `minimax` entry in `ALLOWED_MODELS`. Pass
+`--judge-model <id>` to pin a different allowed model.
+
+#### Check Token-Cost Budgets (Offline)
+
+```bash
+python -m eval.cost_regression              # compare against recorded budgets
+python -m eval.cost_regression --update     # intentionally re-record budgets
+```
+
+The harness replays the dev set through the real routing code for three lane
+configurations (`cloud-only`, `specialists`, `hybrid`) with a simulated cloud
+client. It estimates prompt tokens as `ceil(characters / 4)` and adds a fixed
+per-category completion baseline, so it catches prompt growth and lost
+zero-token lanes without depending on provider billing. Recorded budgets live
+in `eval/token_budgets.json` and are enforced by
+`tests/test_token_budget.py`; re-record only when a cost change is intentional.
 
 #### Measure Specialist Precision (Offline)
 
@@ -333,7 +365,7 @@ Adjust these parameters based on your hardware and workload:
 
 ```text
 agent/            Runtime components: router, prompts, cloud client, local model, specialists, PAL, logging/metrics
-eval/             Development tools: judge, local benchmark, specialist precision harness, versioned router paraphrase suites
+eval/             Development tools: deterministic judge, cost regression, dashboard, local benchmark, specialist precision harness, versioned router paraphrase suites
 finetune/         Fine-tuning pipeline: synthetic data generator, LoRA training, GGUF conversion, notebooks
 models/           ONNX configs and tokenizers (weights are gitignored)
 testio/           Local input batches for practice, development, and stress testing
@@ -425,7 +457,7 @@ QueryLane is a research/competition codebase, not a hosted service. The historic
 - The sentiment specialist has no neutral class; neutral reviews are escalated by design
 - The ONNX NER specialist is enabled by default but remains precision-gated: uncertain tokens, MISC spans without a cue, and incomplete entity coverage escalate to cloud
 - Local generative inference is only useful on hosts above per-category speed thresholds
-- The development judge uses an LLM and is not fully deterministic
+- The development judge is deterministic for 35/40 tasks; the code categories still use an LLM, so run `--runs` before trusting a small accuracy delta
 - `train_all.jsonl` and `train_round2.jsonl` are the same rows in different order; `train_dedup.jsonl` (2,775 rows) is the canonical deduplicated training file, and its two invalid rows are documented in [`finetune/README.md`](finetune/README.md)
 
 ## Contributing

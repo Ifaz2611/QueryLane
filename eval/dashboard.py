@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from agent.router import ALL_CATEGORIES
-from eval import prove_local
+from eval import deterministic
 
 EVAL_DIR = os.path.dirname(__file__)
 DEV_TASKS_PATH = os.path.join(EVAL_DIR, "tasks_dev.json")
@@ -63,6 +63,7 @@ class DashboardReport:
     total_calls: int = 0
     avg_tokens_per_task: float = 0.0
     overall_lanes: Dict[str, int] = field(default_factory=dict)
+    judge_variance: Optional[dict] = None
 
     def format_table(self) -> str:
         lines = []
@@ -139,6 +140,36 @@ class DashboardReport:
             pct = 100.0 * count / max(self.total_tasks, 1)
             lines.append(f"| `{lane}` | {count} | {pct:.1f}% |")
 
+        if self.judge_variance:
+            variance = self.judge_variance
+            lines.append("\n## Grader Variance\n")
+            lines.append(
+                f"- Runs: **{variance.get('runs', 0)}** across "
+                f"**{variance.get('llm_tasks', 0)}** LLM-judged task(s) "
+                f"({variance.get('deterministic_tasks', 0)} task(s) graded deterministically)."
+            )
+            per_run = ", ".join(
+                f"{value:.1f}%" for value in variance.get("accuracy_per_run", [])
+            )
+            lines.append(f"- Accuracy by run: {per_run}")
+            lines.append(
+                f"- Mean **{variance.get('accuracy_mean', 0.0):.1f}%** "
+                f"± {variance.get('accuracy_stdev', 0.0):.1f} "
+                f"(min {variance.get('accuracy_min', 0.0):.1f}%, "
+                f"max {variance.get('accuracy_max', 0.0):.1f}%)."
+            )
+            unstable = variance.get("unstable_tasks", [])
+            if unstable:
+                lines.append("\n| Task | Passes | Runs | Source |")
+                lines.append("| :--- | :---: | :---: | :--- |")
+                for item in unstable:
+                    lines.append(
+                        f"| `{item['task_id']}` | {item['passes']} | "
+                        f"{item['runs']} | {item.get('source', 'llm')} |"
+                    )
+            else:
+                lines.append("\nAll task verdicts were stable across runs.")
+
         return "\n".join(lines)
 
     def to_dict(self) -> dict:
@@ -168,6 +199,7 @@ class DashboardReport:
                 }
                 for cat, m in self.categories.items()
             },
+            **({"judge_variance": self.judge_variance} if self.judge_variance else {}),
         }
 
     def save_markdown(self, path: str):
@@ -182,88 +214,13 @@ class DashboardReport:
 
 
 def deterministic_grade(task: dict, answer: str) -> tuple[bool, str]:
-    """Fallback offline grader using strict task intent heuristics for tasks_dev.json."""
-    tid = task.get("task_id", "")
-    cat = task.get("category", "")
-    ans = answer.strip()
-    if not ans:
-        return False, "empty answer"
-    ans_lower = ans.lower()
+    """Offline fallback grader backed by :mod:`eval.deterministic`.
 
-    if cat == "summarization":
-        return prove_local.grade_summarization(tid, ans)
-    elif cat == "logic":
-        return prove_local.grade_logic(tid, ans)
-    elif cat == "math":
-        expected_nums = {
-            "math-01": "144",
-            "math-02": "72",
-            "math-03": "50",
-            "math-04": "75",
-            "math-05": "750",
-        }
-        target = expected_nums.get(tid)
-        if target and target in ans:
-            return True, f"contains expected numeric result {target}"
-        return False, f"missing expected numeric result {target}"
-    elif cat == "sentiment":
-        expected_labels = {
-            "sent-01": ["mixed", "positive and negative"],
-            "sent-02": ["positive"],
-            "sent-03": ["negative"],
-            "sent-04": ["neutral"],
-            "sent-05": ["mixed", "mostly positive", "positive"],
-        }
-        targets = expected_labels.get(tid, [])
-        first_token = ans_lower.split(",")[0].split(".")[0].strip()
-        if any(t in first_token or t in ans_lower for t in targets):
-            return True, f"matched sentiment target {targets[0]}"
-        return False, f"expected sentiment {targets}"
-    elif cat == "ner":
-        expected_entities = {
-            "ner-01": ["maria sanchez", "fireworks ai", "berlin"],
-            "ner-02": ["14 february 2020", "sarah connor", "toronto"],
-            "ner-03": ["apple", "vision pro", "wwdc", "cupertino"],
-            "ner-04": ["treaty of versailles", "france"],
-            "ner-05": ["amina yusuf", "world health organization", "geneva"],
-        }
-        targets = expected_entities.get(tid, [])
-        matched = sum(1 for e in targets if e in ans_lower)
-        if matched >= len(targets) - 1:  # Allow 1 minor variance
-            return True, f"covered entities ({matched}/{len(targets)})"
-        return False, f"missed required entities from {targets}"
-    elif cat == "factual":
-        expected_facts = {
-            "fact-01": ["tokyo", "honshu"],
-            "fact-02": ["light", "chemical", "sugar", "glucose", "sun"],
-            "fact-03": ["hypertext transfer protocol"],
-            "fact-04": ["george orwell", "1949"],
-            "fact-05": ["100", "212"],
-        }
-        facts = expected_facts.get(tid, [])
-        if all(f in ans_lower for f in facts):
-            return True, f"contains all required facts {facts}"
-        return False, f"missing required facts from {facts}"
-    elif cat == "code_debug":
-        # Check bug fix signals
-        dbg_signals = {
-            "dbg-01": ["return [x for x in", "return [x * 2", "append", "res.append"],
-            "dbg-02": ["n % 2 == 0", "not (n % 2)", "n % 2 != 1"],
-            "dbg-03": ["total = 0", "acc = 0", "sum("],
-            "dbg-04": ["count += 1", "count = count + 1"],
-            "dbg-05": ["if n <= 1", "if n <= 0", "if n == 0", "if n == 1"],
-        }
-        cues = dbg_signals.get(tid, [])
-        if any(c in ans for c in cues) or "def " in ans:
-            return True, "code fix identified"
-        return False, "missing fix pattern"
-    elif cat == "code_gen":
-        # Check valid python function definition and logic
-        if "def " in ans and "return" in ans:
-            return True, "valid function definition with return statement"
-        return False, "missing function definition"
-
-    return True, "default passed"
+    Undecided tasks (code categories without a mechanical check) are reported
+    as failures here; ``eval.judge`` upgrades them to the LLM judge instead.
+    """
+    verdict = deterministic.evaluate(task, answer)
+    return bool(verdict.passed), verdict.reason
 
 
 def build_dashboard(
@@ -272,6 +229,7 @@ def build_dashboard(
     graded_verdicts: Optional[Dict[str, bool]] = None,
     category_tokens: Optional[Dict[str, int]] = None,
     category_calls: Optional[Dict[str, int]] = None,
+    judge_variance: Optional[dict] = None,
 ) -> DashboardReport:
     """Construct a DashboardReport from tasks, agent answers, and verdicts."""
     by_id_answer = {a["task_id"]: a for a in answers}
@@ -348,6 +306,7 @@ def build_dashboard(
         total_calls=total_calls,
         avg_tokens_per_task=avg_tokens_overall,
         overall_lanes=dict(overall_lanes),
+        judge_variance=judge_variance,
     )
 
 

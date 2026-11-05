@@ -1,0 +1,228 @@
+{
+  "fact-01": {
+    "type": "constraints",
+    "required_terms_all": ["tokyo", "honshu"]
+  },
+  "fact-02": {
+    "type": "constraints",
+    "sentence_count": 2,
+    "all_groups": [
+      ["light", "sunlight", "sun"],
+      ["carbon dioxide", "co2"],
+      ["glucose", "sugar", "chemical energy"],
+      ["oxygen"]
+    ]
+  },
+  "fact-03": {
+    "type": "constraints",
+    "required_terms_all": ["hypertext transfer protocol"],
+    "all_groups": [
+      ["web", "internet"],
+      ["transfer", "transport", "send", "data"]
+    ]
+  },
+  "fact-04": {
+    "type": "constraints",
+    "required_terms_all": ["george orwell", "1949"]
+  },
+  "fact-05": {
+    "type": "constraints",
+    "required_numbers": [100, 212],
+    "all_groups": [
+      ["celsius", "c"],
+      ["fahrenheit", "f"]
+    ]
+  },
+
+  "math-01": {
+    "type": "number",
+    "value": 144,
+    "unit_any": ["items", "item"]
+  },
+  "math-02": {
+    "type": "number",
+    "value": 72,
+    "unit_any": ["km/h", "kmh", "kph", "kilometers per hour", "kilometres per hour"]
+  },
+  "math-03": {
+    "type": "number",
+    "value": 50,
+    "unit_any": ["$", "dollar", "usd"]
+  },
+  "math-04": {
+    "type": "number",
+    "value": 75,
+    "unit_any": ["$", "dollar", "usd"]
+  },
+  "math-05": {
+    "type": "number",
+    "value": 750,
+    "unit_any": ["grams", "gram", "g"]
+  },
+
+  "sent-01": {
+    "type": "sentiment_label",
+    "labels": ["mixed"],
+    "min_words_after_label": 3
+  },
+  "sent-02": {
+    "type": "sentiment_label",
+    "labels": ["positive"],
+    "min_words_after_label": 3
+  },
+  "sent-03": {
+    "type": "sentiment_label",
+    "labels": ["negative"],
+    "min_words_after_label": 3
+  },
+  "sent-04": {
+    "type": "sentiment_label",
+    "labels": ["neutral"],
+    "min_words_after_label": 3
+  },
+  "sent-05": {
+    "type": "sentiment_label",
+    "labels": ["mixed", "positive"],
+    "min_words_after_label": 3
+  },
+
+  "summ-01": {
+    "type": "constraints",
+    "sentence_count": 1,
+    "all_groups": [
+      ["bike", "bicycle", "pilot"],
+      ["council", "approved", "vote"],
+      ["7-4", "7 to 4", "seven to four"]
+    ]
+  },
+  "summ-02": {
+    "type": "constraints",
+    "max_words": 10,
+    "all_groups": [
+      ["battery", "batteries", "charge"]
+    ]
+  },
+  "summ-03": {
+    "type": "constraints",
+    "sentence_count": 2,
+    "all_groups": [
+      ["remote", "hybrid", "work"],
+      ["office", "city", "cities", "landlord", "apartment", "adapt"]
+    ]
+  },
+  "summ-04": {
+    "type": "constraints",
+    "sentence_count": 1,
+    "all_groups": [
+      ["bee", "honeybee", "waggle", "dance"],
+      ["food", "direction", "distance", "location"]
+    ]
+  },
+  "summ-05": {
+    "type": "constraints",
+    "max_lines": 1,
+    "all_groups": [
+      ["revenue", "12"],
+      ["subscription", "subscriptions"],
+      ["hardware", "8"],
+      ["margin", "14"]
+    ]
+  },
+
+  "ner-01": {
+    "type": "entities",
+    "entities": [
+      {"name": "Maria Sanchez", "types": ["person"]},
+      {"name": "Fireworks AI", "types": ["organization"]},
+      {"name": "Berlin", "types": ["location"]},
+      {"name": "March", "types": ["date"]}
+    ]
+  },
+  "ner-02": {
+    "type": "entities",
+    "entities": [
+      {"name": "14 February 2020", "types": ["date"]},
+      {"name": "Sarah Connor", "types": ["person"]},
+      {"name": "Toronto", "types": ["location"]},
+      {"name": "Zurich", "types": ["location"]},
+      {"name": "Nestle", "types": ["organization"]}
+    ]
+  },
+  "ner-03": {
+    "type": "entities",
+    "entities": [
+      {"name": "Apple", "types": ["organization"]},
+      {"name": "Vision Pro", "types": ["product"]},
+      {"name": "WWDC", "types": ["event"]},
+      {"name": "Cupertino", "types": ["location"]},
+      {"name": "Tim Cook", "types": ["person"]}
+    ]
+  },
+  "ner-04": {
+    "type": "entities",
+    "entities": [
+      {"name": "Treaty of Versailles", "types": ["event", "misc"]},
+      {"name": "France", "types": ["location"]},
+      {"name": "1919", "types": ["date"]},
+      {"name": "Germany", "types": ["location"]},
+      {"name": "Allied Powers", "types": ["organization"]}
+    ]
+  },
+  "ner-05": {
+    "type": "entities",
+    "entities": [
+      {"name": "Amina Yusuf", "types": ["person"]},
+      {"name": "World Health Organization", "types": ["organization"]},
+      {"name": "Geneva", "types": ["location"]},
+      {"name": "3 June", "types": ["date"]}
+    ]
+  },
+
+  "logic-01": {
+    "type": "constraints",
+    "final_only": true,
+    "required_terms_all": ["sam", "cat"]
+  },
+  "logic-02": {
+    "type": "constraints",
+    "final_only": true,
+    "required_terms_all": ["ben"],
+    "all_groups": [
+      ["last", "third", "3rd", "3"]
+    ]
+  },
+  "logic-03": {
+    "type": "constraints",
+    "final_only": true,
+    "ordered_terms": ["yellow", "red", "blue", "green"]
+  },
+  "logic-04": {
+    "type": "constraints",
+    "final_only": true,
+    "required_terms_all": ["maya"]
+  },
+  "logic-05": {
+    "type": "constraints",
+    "final_only": true,
+    "all_groups": [
+      ["seat 2", "2", "hana"]
+    ]
+  },
+
+  "gen-01": {
+    "type": "requires_code"
+  },
+  "gen-02": {
+    "type": "requires_code"
+  },
+  "gen-03": {
+    "type": "requires_code",
+    "function": "fizzbuzz"
+  },
+  "gen-04": {
+    "type": "requires_code"
+  },
+  "gen-05": {
+    "type": "requires_code"
+  }
+}

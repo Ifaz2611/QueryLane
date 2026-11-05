@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "estimator": "ceil(characters/4) for the exact system+user prompt plus a fixed per-category completion baseline; specialists and local answers are zero-token by construction",
+  "configurations": {
+    "cloud-only": {
+      "budget_tokens": 4901,
+      "calls": 40,
+      "tasks": 40,
+      "avg_tokens_per_task": 122.53,
+      "lanes": {
+        "cloud": 40
+      },
+      "tokens_by_category": {
+        "factual": 401,
+        "math": 403,
+        "sentiment": 399,
+        "summarization": 951,
+        "ner": 586,
+        "code_debug": 699,
+        "logic": 763,
+        "code_gen": 699
+      }
+    },
+    "specialists": {
+      "budget_tokens": 3916,
+      "calls": 30,
+      "tasks": 40,
+      "avg_tokens_per_task": 97.9,
+      "lanes": {
+        "cloud": 30,
+        "specialist": 10
+      },
+      "tokens_by_category": {
+        "factual": 401,
+        "math": 403,
+        "summarization": 951,
+        "code_debug": 699,
+        "logic": 763,
+        "code_gen": 699
+      }
+    },
+    "hybrid": {
+      "budget_tokens": 3513,
+      "calls": 25,
+      "tasks": 40,
+      "avg_tokens_per_task": 87.83,
+      "lanes": {
+        "cloud": 25,
+        "local": 5,
+        "specialist": 10
+      },
+      "tokens_by_category": {
+        "factual": 401,
+        "summarization": 951,
+        "code_debug": 699,
+        "logic": 763,
+        "code_gen": 699
+      }
+    }
+  }
+}

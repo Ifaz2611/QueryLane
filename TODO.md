@@ -137,15 +137,32 @@ the rest are future work.
 
 ## P1 — evaluation
 
-- [ ] Replace or supplement the nondeterministic LLM judge with deterministic
+- [x] Replace or supplement the nondeterministic LLM judge with deterministic
       checks where possible (exact labels, sentence counts, entity sets).
-- [ ] Run the judge multiple times and report variance; several historical
+      `eval/deterministic.py` + `eval/checks_dev.json` decide 35/40 dev tasks;
+      `eval/judge.py --grader {hybrid,deterministic,llm}` uses deterministic
+      verdicts when authoritative and only sends the code categories to the
+      LLM. `--answers <file> --grader deterministic` re-grades offline with no
+      API credentials.
+- [x] Run the judge multiple times and report variance; several historical
       scores flipped between runs.
-- [ ] Add a token-cost regression test: the dev set must stay under a recorded
+      `eval/judge.py --runs N` (default 3) writes per-task flip counts and
+      per-run accuracy mean/stdev/range to `eval/judge_variance.json`, and the
+      dashboard now carries a `judge_variance` block.
+- [x] Add a token-cost regression test: the dev set must stay under a recorded
       budget for each lane configuration.
-- [ ] Add end-to-end tests that run `python -m agent.main` against
+      `eval/cost_regression.py` measures `cloud-only`, `specialists`, and
+      `hybrid` offline; `eval/token_budgets.json` records the budgets and
+      `tests/test_token_budget.py` fails on any overrun.
+- [x] Add end-to-end tests that run `python -m agent.main` against
       `testio/input/tasks.json` with a mocked cloud client.
-- [ ] Record the exact model versions used for each `SCORES.md` row.
+      `tests/test_e2e.py` starts a local OpenAI-compatible mock server, runs the
+      real entrypoint as a subprocess, and checks every output row plus the
+      error path.
+- [x] Record the exact model versions used for each `SCORES.md` row.
+      `SCORES.md` now has a `Models (exact)` column and a legend with the full
+      Fireworks ids, GGUF artifact names, and Hugging Face base ids; historical
+      revisions were not pinned, which is called out explicitly.
 
 ## P2 — packaging and rebrand polish
 
@@ -198,7 +215,8 @@ the rest are future work.
   uncovered capitalized span/date all escalate to cloud.
 - Local generative inference is only useful on hosts above the per-category
   speed bars; the historical grader was slower than the original thresholds.
-- The dev judge is an LLM and is not fully deterministic.
+- The dev judge is deterministic for 35/40 tasks; the remaining code categories
+  are LLM-graded, so use `--runs` when a small accuracy delta matters.
 - `train_all.jsonl` and `train_round2.jsonl` are the same 2,819 rows in
   different order (documented in `finetune/README.md` and
   `data/dedupe_report.json`); the canonical deduplicated training file is
