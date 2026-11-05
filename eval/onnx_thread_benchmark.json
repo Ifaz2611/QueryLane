@@ -1,0 +1,65 @@
+{
+  "host": {
+    "cpu_count": 16,
+    "configured_default_threads": 4,
+    "best_threads_measured": 4
+  },
+  "model": "Synthetic Transformer Workload (4 layers, 512x2048)",
+  "threads_benchmark": {
+    "1": {
+      "threads": 1,
+      "init_time_ms": 70.39,
+      "mean_latency_ms": 2.038,
+      "p50_latency_ms": 1.916,
+      "p95_latency_ms": 2.618,
+      "p99_latency_ms": 2.957,
+      "throughput_qps": 490.6,
+      "speedup_vs_1thread": 1.0
+    },
+    "2": {
+      "threads": 2,
+      "init_time_ms": 63.05,
+      "mean_latency_ms": 1.545,
+      "p50_latency_ms": 1.571,
+      "p95_latency_ms": 1.908,
+      "p99_latency_ms": 1.926,
+      "throughput_qps": 647.3,
+      "speedup_vs_1thread": 1.32
+    },
+    "4": {
+      "threads": 4,
+      "init_time_ms": 70.95,
+      "mean_latency_ms": 1.284,
+      "p50_latency_ms": 1.239,
+      "p95_latency_ms": 1.627,
+      "p99_latency_ms": 1.657,
+      "throughput_qps": 779.0,
+      "speedup_vs_1thread": 1.59
+    },
+    "8": {
+      "threads": 8,
+      "init_time_ms": 73.05,
+      "mean_latency_ms": 1.436,
+      "p50_latency_ms": 1.386,
+      "p95_latency_ms": 1.681,
+      "p99_latency_ms": 1.715,
+      "throughput_qps": 696.4,
+      "speedup_vs_1thread": 1.42
+    },
+    "16": {
+      "threads": 16,
+      "init_time_ms": 107.12,
+      "mean_latency_ms": 2.53,
+      "p50_latency_ms": 1.944,
+      "p95_latency_ms": 5.13,
+      "p99_latency_ms": 7.075,
+      "throughput_qps": 395.2,
+      "speedup_vs_1thread": 0.81
+    }
+  },
+  "caching_benchmark": {
+    "uncached_init_ms": 59.07,
+    "cached_init_ms": 65.99,
+    "cache_speedup": 0.9
+  }
+}

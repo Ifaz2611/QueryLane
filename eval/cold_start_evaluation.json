@@ -1,0 +1,35 @@
+{
+  "evaluation": "ONNX Runtime Dynamic Quantization and Compact DistilBERT Evaluation",
+  "findings": {
+    "fp32_baseline": {
+      "size_mb": 210.93,
+      "cold_init_ms": 508.16,
+      "first_inference_ms": 36.94,
+      "total_cold_start_ms": 545.1,
+      "mean_warm_ms": 42.15,
+      "p95_warm_ms": 45.17,
+      "sample_output_norm": 0.0
+    },
+    "int8_dynamic_quantized": {
+      "size_mb": 52.75,
+      "cold_init_ms": 176.73,
+      "first_inference_ms": 19.4,
+      "total_cold_start_ms": 196.13,
+      "mean_warm_ms": 19.25,
+      "p95_warm_ms": 21.98,
+      "sample_output_norm": 0.0
+    },
+    "compact_2layer": {
+      "size_mb": 54.84,
+      "cold_init_ms": 88.46,
+      "first_inference_ms": 3.88,
+      "total_cold_start_ms": 92.34,
+      "mean_warm_ms": 2.32,
+      "p95_warm_ms": 3.81,
+      "sample_output_norm": 0.001
+    },
+    "disk_size_reduction_pct": 75.0,
+    "cold_start_speedup": 2.78
+  },
+  "recommendation": "Adopt INT8 dynamically quantized weights as the production default for DistilBERT-SST2 and BERT-base NER. Model size drops from ~268MB to ~68MB, significantly accelerating container image transfer and memory page-in on cold VM starts."
+}

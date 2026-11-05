@@ -121,7 +121,14 @@ def explain_decision(prompt: str) -> Dict[str, Any]:
     # 5. Local model checks
     local_avail = local_model.available()
     local_enabled = local_model.category_enabled(category)
-    if category in LOCAL_CATEGORIES:
+    too_long = local_model.is_prompt_too_long(clean_prompt, category)
+    if too_long:
+        reasons.append(
+            f"Prompt length ({len(clean_prompt)} chars) exceeds local model context budget ({local_model.LOCAL_N_CTX} tokens). "
+            "Routed directly to cloud to prevent context overflow and wasted compute."
+        )
+        triggers.append("Context window capacity exceeded; bypassed local inference.")
+    elif category in LOCAL_CATEGORIES:
         if local_avail and local_enabled:
             reasons.append(
                 f"Category '{category}' is enabled for local GGUF execution and cleared speed threshold."
@@ -156,6 +163,7 @@ def explain_decision(prompt: str) -> Dict[str, Any]:
         "specialist_available": spec_avail,
         "local_available": local_avail,
         "is_multipart_math": is_multipart,
+        "is_prompt_too_long": too_long,
         "reasons": reasons,
         "escalation_triggers": triggers,
         "estimated_token_cost": cost_desc,

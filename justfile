@@ -29,6 +29,18 @@ check-secrets:
 eval:
     python -m eval.deterministic
 
+# Benchmark ONNX Runtime intra_op_num_threads
+bench-onnx:
+    python -m eval.benchmark_onnx_threads
+
+# Evaluate dynamic quantization & cold-start latency
+eval-cold-start:
+    python -m eval.eval_quantization_distilbert
+
+# Measure speculative category batching token economics
+measure-batching:
+    python -m eval.measure_batching
+
 # Build sdist and wheel package distributions
 build:
     python -m build

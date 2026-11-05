@@ -216,6 +216,50 @@ _MAX_TOKENS = {
     "logic": 400,
 }
 
+LOCAL_N_CTX = int(os.environ.get("LOCAL_N_CTX", "2048"))
+
+
+def estimate_tokens(text: str) -> int:
+    """Fast conservative heuristic for token count without requiring model load.
+
+    Assumes ~3.2 characters per token on average (safe upper bound for text/code).
+    """
+    if not text:
+        return 0
+    char_estimate = int(len(text) / 3.2) + 1
+    word_estimate = int(len(text.split()) * 1.35) + 1
+    return max(char_estimate, word_estimate)
+
+
+def max_prompt_tokens(category: str = "factual") -> int:
+    """Maximum allowed user prompt tokens before exceeding LOCAL_N_CTX."""
+    system_text = _LOCAL_SYSTEM.get(category, _LOCAL_SYSTEM["factual"])
+    fewshot = _LOCAL_FEWSHOT.get(category, [])
+    fewshot_text = " ".join(m.get("content", "") for m in fewshot)
+    prompt_overhead = (
+        estimate_tokens(system_text) + estimate_tokens(fewshot_text) + 32
+    )  # chat formatting overhead
+    cap = _MAX_TOKENS.get(category, 200)
+    return max(0, LOCAL_N_CTX - prompt_overhead - cap)
+
+
+def is_prompt_too_long(prompt: str, category: str = "factual") -> bool:
+    """Return True if prompt exceeds context window capacity for the local model.
+
+    Prevents wasting local time budget and latency on prompts that would overflow
+    n_ctx during create_chat_completion and crash into cloud fallback anyway.
+    """
+    if not prompt:
+        return False
+    limit = max_prompt_tokens(category)
+    if _llm is not None:
+        try:
+            tokens = _llm.tokenize(prompt.encode("utf-8"))
+            return len(tokens) > limit
+        except Exception:
+            pass
+    return estimate_tokens(prompt) > limit
+
 
 def available() -> bool:
     global _import_ok
@@ -245,7 +289,7 @@ def _get_llm():
 
             _llm = Llama(
                 model_path=MODEL_PATH,
-                n_ctx=2048,
+                n_ctx=LOCAL_N_CTX,
                 n_threads=int(os.environ.get("LOCAL_THREADS", "2")),
                 verbose=False,
             )
@@ -463,6 +507,8 @@ def answer(category: str, prompt: str) -> str:
     global _time_spent
     if not ready() or not category_proven(category):
         return ""  # budget exhausted, unproven, or too slow; caller falls back to cloud
+    if is_prompt_too_long(prompt, category):
+        return ""  # context overflow guard: immediately escalate without burning local budget
     with _budget_lock:
         if _category_time_spent.get(category, 0.0) >= category_budget(category):
             return ""  # category-level fallback budget exhausted

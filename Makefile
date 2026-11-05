@@ -1,7 +1,7 @@
 # QueryLane Makefile
 # Common developer workflows: test, lint, format, eval, build, and docker.
 
-.PHONY: help test test-cov lint format check-secrets eval build check-pkg clean models-onnx models-all docker-cloud docker-multiarch explain web
+.PHONY: help test test-cov lint format check-secrets eval build check-pkg clean models-onnx models-all docker-cloud docker-multiarch explain web bench-onnx eval-cold-start measure-batching
 
 help:
 	@echo "QueryLane Development Commands:"
@@ -11,6 +11,9 @@ help:
 	@echo "  make format            Run ruff code formatter"
 	@echo "  make check-secrets     Scan repository for accidental secrets"
 	@echo "  make eval              Run deterministic dev-set evaluation"
+	@echo "  make bench-onnx        Benchmark ONNX intra_op_num_threads"
+	@echo "  make eval-cold-start   Evaluate dynamic quantization & cold start"
+	@echo "  make measure-batching  Measure category batching token economics"
 	@echo "  make build             Build sdist and wheel packages"
 	@echo "  make check-pkg         Verify distribution packages with twine"
 	@echo "  make models-onnx       Download & verify ONNX specialist models"
@@ -38,6 +41,15 @@ check-secrets:
 
 eval:
 	python -m eval.deterministic
+
+bench-onnx:
+	python -m eval.benchmark_onnx_threads
+
+eval-cold-start:
+	python -m eval.eval_quantization_distilbert
+
+measure-batching:
+	python -m eval.measure_batching
 
 build:
 	python -m build

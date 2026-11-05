@@ -48,6 +48,24 @@ def _softmax(x, axis=-1):
     return e / e.sum(axis=axis, keepdims=True)
 
 
+def get_optimal_intra_op_threads() -> int:
+    """Return tuned intra-op thread count for ONNX Runtime.
+
+    Respects ONNX_INTRA_OP_THREADS if explicitly configured.
+    Otherwise adapts to the host: on 1-2 vCPU containers, uses all available CPUs.
+    On larger machines (4+ CPUs), bounds at 4 to prevent CPU contention with the
+    worker thread pool and reduce context-switching overhead.
+    """
+    env_threads = os.environ.get("ONNX_INTRA_OP_THREADS")
+    if env_threads:
+        try:
+            return max(1, int(env_threads))
+        except ValueError:
+            pass
+    cpu_count = os.cpu_count() or 2
+    return min(4, max(1, cpu_count))
+
+
 def _load(kind: str):
     """Lazy-load (session, tokenizer, id2label) for 'ner' or 'sst2'."""
     with _lock:
@@ -58,9 +76,26 @@ def _load(kind: str):
 
         directory = NER_DIR if kind == "ner" else SST2_DIR
         options = ort.SessionOptions()
-        options.intra_op_num_threads = 2
+        options.intra_op_num_threads = get_optimal_intra_op_threads()
+        options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+
+        # Serialized graph cache across processes:
+        opt_cache_dir = os.environ.get("ONNX_CACHE_DIR", directory)
+        opt_model_name = f"model.{kind}.optimized.onnx"
+        opt_model_path = os.path.join(opt_cache_dir, opt_model_name)
+        orig_model_path = os.path.join(directory, "model.onnx")
+
+        # Load optimized model if exists, otherwise load original and optimize
+        model_to_load = opt_model_path if os.path.exists(opt_model_path) else orig_model_path
+        if model_to_load == orig_model_path and os.environ.get("ONNX_DISABLE_CACHE") != "1":
+            try:
+                if os.access(opt_cache_dir, os.W_OK):
+                    options.optimized_model_filepath = opt_model_path
+            except Exception:
+                pass
+
         session = ort.InferenceSession(
-            os.path.join(directory, "model.onnx"),
+            model_to_load,
             sess_options=options,
             providers=["CPUExecutionProvider"],
         )
@@ -70,6 +105,17 @@ def _load(kind: str):
         id2label = {int(k): v for k, v in config.get("id2label", {}).items()}
         _sessions[kind] = (session, tokenizer, id2label)
         return _sessions[kind]
+
+
+def preload(kind: str = "all") -> None:
+    """Pre-warm ONNX sessions and tokenizers in the background or at startup."""
+    targets = ["sst2", "ner"] if kind == "all" else [kind]
+    for k in targets:
+        if available(k):
+            try:
+                _load(k)
+            except Exception:
+                pass
 
 
 def available(kind: str) -> bool:

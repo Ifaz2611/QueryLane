@@ -1,0 +1,124 @@
+{
+  "experiment": "Speculative Category Batching Cost/Benefit Analysis",
+  "tested_group_sizes": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    8,
+    10,
+    12,
+    16,
+    20
+  ],
+  "results": [
+    {
+      "group_size": 1,
+      "evaluated_categories": 8,
+      "unbatched_tokens": 755,
+      "batched_tokens": 1217,
+      "net_token_delta": 462,
+      "pct_difference": 61.19,
+      "verdict": "NET TOKEN LOSS"
+    },
+    {
+      "group_size": 2,
+      "evaluated_categories": 8,
+      "unbatched_tokens": 1464,
+      "batched_tokens": 1776,
+      "net_token_delta": 312,
+      "pct_difference": 21.31,
+      "verdict": "NET TOKEN LOSS"
+    },
+    {
+      "group_size": 3,
+      "evaluated_categories": 8,
+      "unbatched_tokens": 2336,
+      "batched_tokens": 2498,
+      "net_token_delta": 162,
+      "pct_difference": 6.93,
+      "verdict": "NET TOKEN LOSS"
+    },
+    {
+      "group_size": 4,
+      "evaluated_categories": 8,
+      "unbatched_tokens": 3108,
+      "batched_tokens": 3121,
+      "net_token_delta": 13,
+      "pct_difference": 0.42,
+      "verdict": "NET TOKEN LOSS"
+    },
+    {
+      "group_size": 5,
+      "evaluated_categories": 8,
+      "unbatched_tokens": 3865,
+      "batched_tokens": 3730,
+      "net_token_delta": -135,
+      "pct_difference": -3.49,
+      "verdict": "NET TOKEN SAVING"
+    },
+    {
+      "group_size": 6,
+      "evaluated_categories": 8,
+      "unbatched_tokens": 4620,
+      "batched_tokens": 4332,
+      "net_token_delta": -288,
+      "pct_difference": -6.23,
+      "verdict": "NET TOKEN SAVING"
+    },
+    {
+      "group_size": 8,
+      "evaluated_categories": 8,
+      "unbatched_tokens": 6201,
+      "batched_tokens": 5615,
+      "net_token_delta": -586,
+      "pct_difference": -9.45,
+      "verdict": "NET TOKEN SAVING"
+    },
+    {
+      "group_size": 10,
+      "evaluated_categories": 8,
+      "unbatched_tokens": 7730,
+      "batched_tokens": 6846,
+      "net_token_delta": -884,
+      "pct_difference": -11.44,
+      "verdict": "NET TOKEN SAVING"
+    },
+    {
+      "group_size": 12,
+      "evaluated_categories": 8,
+      "unbatched_tokens": 9194,
+      "batched_tokens": 8007,
+      "net_token_delta": -1187,
+      "pct_difference": -12.91,
+      "verdict": "NET TOKEN SAVING"
+    },
+    {
+      "group_size": 16,
+      "evaluated_categories": 8,
+      "unbatched_tokens": 12350,
+      "batched_tokens": 10564,
+      "net_token_delta": -1786,
+      "pct_difference": -14.46,
+      "verdict": "NET TOKEN SAVING"
+    },
+    {
+      "group_size": 20,
+      "evaluated_categories": 8,
+      "unbatched_tokens": 15460,
+      "batched_tokens": 13078,
+      "net_token_delta": -2382,
+      "pct_difference": -15.41,
+      "verdict": "NET TOKEN SAVING"
+    }
+  ],
+  "breakeven_group_size": 5,
+  "architectural_decision": "Retain unbatched 1-call-per-task architecture",
+  "key_reasons": [
+    "QueryLane's terse system prompts (20-35 tokens) mean delimiter overhead exceeds system prompt savings at group sizes 1-6",
+    "Real evaluation batches (19 tasks / 8 categories) average 2.4 tasks per category, well below breakeven",
+    "Batching eliminates thread concurrency and introduces delimiter parsing failure risk"
+  ]
+}

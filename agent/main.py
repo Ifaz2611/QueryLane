@@ -97,6 +97,16 @@ def _prompt_of(task: dict) -> str:
     return prompt if isinstance(prompt, str) else ""
 
 
+def _is_prompt_too_long(prompt: str, category: str) -> bool:
+    checker = getattr(local_model, "is_prompt_too_long", None)
+    if checker is None:
+        return False
+    try:
+        return checker(prompt, category) is True
+    except Exception:
+        return False
+
+
 def predict_lane(category: str, target: str, confidence: float, prompt: str) -> str:
     """Best guess at the lane that will actually produce the answer.
 
@@ -117,6 +127,8 @@ def predict_lane(category: str, target: str, confidence: float, prompt: str) -> 
         return "cloud"
     if category == "math" and pal.is_multipart(prompt):
         return "cloud"  # single-EXPR local path cannot answer two quantities
+    if _is_prompt_too_long(prompt, category):
+        return "cloud"  # context overflow: prompt exceeds local model n_ctx
     if local_model.available() and local_model.category_enabled(category):
         return "local"
     return "cloud"
@@ -262,7 +274,8 @@ def _answer_task_once(cloud, task_id, prompt, category, target, low_confidence, 
 
     if not answer and target == "local":
         if (
-            _remaining() > LOCAL_CUTOFF_SECONDS
+            not _is_prompt_too_long(prompt, category)
+            and _remaining() > LOCAL_CUTOFF_SECONDS
             and local_model.available()
             and local_model.wait_ready(150)
             and local_model.category_enabled(category)
