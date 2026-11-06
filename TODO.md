@@ -223,13 +223,13 @@ the rest are future work.
 
 ## P2 — docs
 
-- [ ] Add architecture diagrams for the lane order and escalation paths.
-- [ ] Document the exact judge prompt and its known failure modes.
-- [ ] Add a troubleshooting section for missing models, missing API keys, and
+- [x] Add architecture diagrams for the lane order and escalation paths.
+- [x] Document the exact judge prompt and its known failure modes.
+- [x] Add a troubleshooting section for missing models, missing API keys, and
       slow hosts.
-- [ ] Document how to add a new category end to end (router, prompts, local
+- [x] Document how to add a new category end to end (router, prompts, local
       system prompt, eval rows).
-- [ ] Add a security note about prompt injection from task payloads and why
+- [x] Add a security note about prompt injection from task payloads and why
       routing is lexical rather than model-based.
 
 ## Known limitations

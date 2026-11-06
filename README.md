@@ -3,125 +3,116 @@
   <p><strong>Cost-aware LLM query routing: zero-token specialists, local models, and cloud fallback.</strong></p>
 </div>
 
-QueryLane intelligently routes each query through a hierarchy of processing lanes, always choosing the cheapest option that can provide a correct answer. It prioritizes deterministic rules and zero-token local specialists before falling back to cloud LLMs only when necessary.
+QueryLane routes each query through a hierarchy of processing lanes, always
+choosing the cheapest option that can produce a correct answer. Deterministic
+rules and zero-token local specialists run first; cloud LLMs are used only when
+nothing cheaper is confident enough.
 
-QueryLane was originally developed as a Track 1 submission for a competition where the scoring metric was Fireworks token usage, subject to an 80% accuracy gate. The routing methodology is general-purpose: classify the request, spend nothing when a specialist is confident, and escalate on doubt rather than risk an incorrect answer.
+Originally built as a competition submission scored on Fireworks token usage
+under an 80% accuracy gate, the methodology is general-purpose: classify the
+request, spend nothing when a specialist is confident, and escalate on doubt
+rather than risk a wrong answer.
 
-## Key Features
+## Features
 
-- **Zero-cost specialists**: ONNX-based models for sentiment analysis and NER that run entirely locally
-- **Smart routing**: Lexical cue-based classification to determine the optimal processing lane
-- **Escalation on uncertainty**: When cheap lanes aren't confident, tasks automatically fall through to more capable (but more expensive) options
-- **Local model support**: Optional GGUF model for factual, math, and NER queries with automatic speed calibration
-- **Cost optimization**: Terse system prompts and minimal retries to reduce token usage
-- **Safety-first**: Precision-focused specialists that escalate rather than guess
-- **Interactive Explainer & Web Demo**: CLI and zero-dependency web interface explaining routing decisions
+- **Zero-token specialists** — ONNX models for sentiment (SST-2) and NER that
+  run entirely on CPU and self-gate on uncertainty
+- **Lexical routing** — deterministic, zero-cost classification into eight
+  categories with a confidence score
+- **Escalate on doubt** — cheap lanes return empty when unsure and the task
+  falls through to a more capable lane; accuracy is never traded for tokens
+- **Optional local GGUF lane** — speed-calibrated per category before a single
+  token is generated
+- **Token-frugal cloud path** — terse per-category system prompts,
+  `reasoning_effort="none"`, model fallback across `ALLOWED_MODELS`
+- **Program-aided math** — cloud emits `EXPR: ... | UNIT: ...`, evaluated
+  locally through an AST whitelist
+- **Explainer & web demo** — CLI and zero-dependency UI for inspecting
+  routing decisions
+
+## Documentation
+
+| Doc | Contents |
+|-----|----------|
+| [docs/lanes.md](docs/lanes.md) | Lane decision flowchart, escalation state diagram, per-lane mechanics |
+| [docs/judge.md](docs/judge.md) | Exact judge prompt, deterministic checks, known failure modes |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Missing models/keys, slow hosts, eval issues |
+| [docs/adding-a-category.md](docs/adding-a-category.md) | End-to-end guide for a new category |
+| [docs/security.md](docs/security.md) | Prompt-injection notes, why routing is lexical |
 
 ## Architecture
 
-> 📖 **Full Architecture Guide**: See [docs/lanes.md](docs/lanes.md) for the complete Mermaid decision flowchart, escalation state diagram, and category mechanics.
+Lanes run in order of increasing cost:
 
-QueryLane uses a multi-lane routing strategy that processes queries in order of increasing cost:
-
-| Lane | Cost | Used For |
+| Lane | Cost | Used for |
 |------|------|----------|
 | **Rules** | 0 tokens | Category classification, instruction stripping, answer normalization |
-| **ONNX Specialists** | 0 tokens | Confident sentiment classification (SST-2 + cue gates) |
-| **Local GGUF Model** | 0 tokens | Fine-tuned factual/math/NER answers when host is fast enough |
-| **Cloud Model** | Billed | Everything uncertain, plus code, logic, and summarization |
+| **PAL math** | ~15 tokens | Single-quantity math via cloud `EXPR:` + local AST eval |
+| **ONNX specialists** | 0 tokens | Confident sentiment and NER |
+| **Local GGUF** | 0 tokens | Categories in `LOCAL_CATEGORIES` on hosts that clear the TPS bar |
+| **Cloud** | billed | Everything uncertain, plus code, logic, and summarization |
 
-### How Escalation Works
+**Escalation** is the core invariant: a cheap lane answers only when confident;
+otherwise it returns `""` and the task falls through. Paying ~100 cloud tokens
+always beats an accuracy-gate miss.
 
-The accuracy gate is protected by **escalation**: when a cheap lane is not confident in its answer, it returns an empty response and the task automatically falls through to the next lane. This ensures that QueryLane never risks an incorrect answer just to save tokens—when in doubt, it escalates.
+### Pipeline
 
-## Routing Pipeline
-
-### Category Classification
-
-The router in `agent/router.py` classifies each prompt into one of eight categories using only lexical cues:
-
-- `factual` - General knowledge questions
-- `math` - Mathematical problems and calculations
-- `sentiment` - Sentiment analysis and opinion extraction
-- `summarization` - Text summarization tasks
-- `ner` - Named entity recognition
-- `code_debug` - Debugging and code analysis
-- `logic` - Logical reasoning problems
-- `code_gen` - Code generation tasks
-
-The check order is intentional: instruction verbs (e.g., "extract entities", "fix this bug", "write a function", "summarize") are tested before content cues that might appear within quoted passages. Unknown prompts default to `factual`, which is the safest cloud-routed category. Each classification also carries a confidence score; prompts below `ROUTER_MIN_CONFIDENCE` (default `0.70`) are sent straight to cloud even when the category would otherwise run locally.
-
-### Lane Selection
-
-After classification, `agent/main.py` applies the lanes in sequence:
-
-1. **Specialist Lane** — Sentiment and NER (when the ONNX weights are present) via ONNX models. These specialists are self-gating and return empty strings when they detect hedges, quoted marketing copy, low confidence, incomplete entity coverage, or uncertain spans. NER is enabled by default; set `NER_SPECIALIST=off` to disable it.
-
-2. **Local Model Lane** — Only for categories listed in `LOCAL_CATEGORIES`, and only after warm-up calibration proves the host clears the category's speed threshold. This ensures local inference is only used when it's actually faster than cloud.
-
-3. **Cloud Lane** — The fallback in `agent/cloud.py` uses terse per-category system prompts, disables reasoning features where possible, and falls back across allowed models if one fails.
-
-### Math Processing
-
-Math queries have an additional optimization: the cloud model may return a structured response with `EXPR: ... | UNIT: ...`, which `agent/pal.py` evaluates locally using an AST whitelist for safety. If parsing or safety checks fail, the system falls back to step-by-step generation.
+1. **Classify** (`agent/router.py`) — lexical cues assign one of eight
+   categories: `factual`, `math`, `sentiment`, `summarization`, `ner`,
+   `code_debug`, `logic`, `code_gen`. Instruction verbs are checked before
+   content cues that could appear inside quoted text. Unknown prompts fall
+   back to `factual` (safest, cloud-routed). Each classification carries a
+   confidence score; below `ROUTER_MIN_CONFIDENCE` (default `0.70`) the task
+   goes straight to cloud.
+2. **Specialists** (`agent/specialists.py`) — sentiment and NER run first for
+   their categories when weights are present. Both are self-gating: hedges,
+   low confidence, incomplete entity coverage, or uncovered capitalized spans
+   all escalate.
+3. **Local model** (`agent/local.py`) — only for categories in
+   `LOCAL_CATEGORIES`, only after warmup calibration proves the host clears
+   the category's tokens-per-second bar, and only while `LOCAL_TIME_BUDGET`
+   and `LOCAL_CUTOFF` allow. Answers pass `answer_ok()` or escalate.
+4. **Cloud** (`agent/cloud.py`) — terse `prompts.SPECS` system prompts,
+   `temperature=0`, `reasoning_effort="none"`, double token budget
+   (`max_tokens`, then `max_tokens*4`), transient-only retries, and model
+   fallback across `ALLOWED_MODELS` (kimi preferred — ~54 prompt-token
+   overhead vs minimax's ~163).
 
 ## Quick Start
 
 ### Prerequisites
 
-- Python 3.10 or higher
-- A Fireworks API key (for cloud LLM access)
-- (Optional) ONNX model weights for local specialists
-- (Optional) GGUF model for local inference
+- Python 3.10+
+- A Fireworks API key (cloud lane; required for any non-dry-run)
+- Optional: ONNX weights for specialists, GGUF weights for the local lane
 
-### Installation
-
-#### 1. Clone and Set Up Environment
+### Install
 
 ```bash
 python -m venv .venv
-# Windows: .venv\Scripts\activate
-# macOS/Linux: source .venv/bin/activate
-pip install -e .
+# Windows: .venv\Scripts\activate   |   macOS/Linux: source .venv/bin/activate
+pip install -e .                    # core (cloud-only)
 ```
 
-#### 2. Install Optional Components
+Optional extras:
 
-**For ONNX specialists (sentiment/NER):**
 ```bash
-pip install -e ".[specialists]"
-```
-
-**For local GGUF inference:**
-```bash
+pip install -e ".[specialists]"     # numpy, onnxruntime, tokenizers
 pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+pip install -e ".[dev]"             # pytest, ruff
+pip install -e ".[finetune]"        # transformers, trl, peft, datasets, accelerate
+pre-commit install                  # ruff + secret scanning on each commit
 ```
 
-**For development/testing:**
-```bash
-pip install -e ".[dev]"
-pre-commit install  # enable ruff + secret scanning before each commit
-```
+Fine-tuning pipeline: see [`finetune/README.md`](finetune/README.md); start
+with `python -m finetune.validate_data` before any training run.
 
-**For fine-tuning capabilities:**
-```bash
-pip install -e ".[finetune]"
-```
-The dataset/validation/dedupe/training pipeline is documented in
-[`finetune/README.md`](finetune/README.md); start with
-`python -m finetune.validate_data` before any training run.
-
-### Configuration
-
-#### 1. Environment Variables
-
-Copy `.env.example` to `.env` and fill in your credentials:
+### Configure
 
 ```bash
 cp .env.example .env
 ```
-
-Edit `.env` with your Fireworks credentials:
 
 ```env
 FIREWORKS_API_KEY=fw_your_key_here
@@ -129,200 +120,140 @@ FIREWORKS_BASE_URL=https://api.fireworks.ai/inference/v1
 ALLOWED_MODELS=accounts/fireworks/models/minimax-m3,accounts/fireworks/models/kimi-k2p7-code
 ```
 
-**Security Note:** Never commit `.env` to version control. The grading harness injects real credentials at evaluation time; your local development file should stay private.
+Never commit `.env` — the grading harness injects real credentials; `scripts/
+check_secrets.py` enforces this in pre-commit and CI.
 
-#### 2. Model Paths (Optional)
-
-If using local specialists or GGUF models, set these environment variables:
+Optional local-lane variables:
 
 ```env
 LOCAL_MODEL_PATH=/app/models/model.gguf
-LOCAL_CATEGORIES=factual,math,ner
+LOCAL_CATEGORIES=factual,math,ner    # empty = cloud-only (default)
 NER_MODEL_DIR=/app/models/ner
 SST2_MODEL_DIR=/app/models/sst2
-NER_SPECIALIST=on   # default; set to 'off' to disable the NER specialist
-ROUTER_MIN_CONFIDENCE=0.70
+NER_SPECIALIST=on                    # set 'off' to disable the NER specialist
 ```
 
-### Running Queries
-
-#### Basic Usage
-
-The default contract reads from `/input/tasks.json` and writes to `/output/results.json`:
+Model weights are git-ignored. Download and verify them (SHA-256 checked)
+with:
 
 ```bash
-python -m agent.main
+python scripts/download_models.py onnx   # NER + SST-2 specialists
+python scripts/download_models.py gguf   # Qwen2.5 GGUF weights
+python scripts/download_models.py all
 ```
 
-Or use the installed console script:
+### Run
+
+Default contract: read `TASKS_PATH` (default `/input/tasks.json`), write
+`RESULTS_PATH` (default `/output/results.json`).
 
 ```bash
-querylane
+python -m agent.main        # or: querylane
 ```
 
-#### Local Development
-
-Override default paths for local testing:
+Local development with custom paths:
 
 ```bash
-# PowerShell
+# Windows PowerShell
 $env:TASKS_PATH="testio/input_dev/tasks.json"
 $env:RESULTS_PATH="testio/output_dev/results.json"
 python -m agent.main
 
 # macOS/Linux
-export TASKS_PATH="testio/input_dev/tasks.json"
-export RESULTS_PATH="testio/output_dev/results.json"
-python -m agent.main
+TASKS_PATH=testio/input_dev/tasks.json RESULTS_PATH=testio/output_dev/results.json python -m agent.main
 ```
 
-#### Dry Run (no tokens spent)
-
-Route a batch and report the lane each task would take without calling the
-cloud or loading the local model. Useful for checking a router or
-`LOCAL_CATEGORIES` change before spending anything:
+Dry run — report the lane each task would take, spend zero tokens:
 
 ```bash
-python -m agent.main --dry-run      # or AGENT_DRY_RUN=1 python -m agent.main
+python -m agent.main --dry-run    # or AGENT_DRY_RUN=1
+python -m agent.explain "Calculate 25 * 40 - 150"   # explain one prompt
 ```
 
-Each task is logged with its category, confidence, and predicted lane
-(`cloud`, `specialist`, or `local`). The output file still contains every
-`task_id` with an empty `answer`, and the process exits 0.
+### Input / output contract
 
-#### Input Format
+Input is a JSON array of `{"task_id": "...", "prompt": "..."}`. Output is a
+JSON array of `{"task_id": "...", "answer": "..."}` with these guarantees:
 
-Tasks should be provided as a JSON array:
+- Every input `task_id` gets exactly one output row, in input order, even on
+  failure (failed tasks get `""`).
+- Duplicate `task_id`s are answered once; every row receives that answer.
+- Missing, `null`, or non-string prompts are treated as empty and routed to
+  cloud.
+- A global deadline (`AGENT_DEADLINE`, default 480s; harness kills at 600s)
+  guarantees results are written in time; unfinished tasks keep `""`.
 
-```json
-[
-  {
-    "task_id": "task_001",
-    "prompt": "What is the capital of France?"
-  },
-  {
-    "task_id": "task_002",
-    "prompt": "Classify the sentiment: I love this product!"
-  }
-]
-```
-
-#### Output Format
-
-Results are returned as a JSON array:
-
-```json
-[
-  {
-    "task_id": "task_001",
-    "answer": "Paris"
-  },
-  {
-    "task_id": "task_002",
-    "answer": "positive"
-  }
-]
-```
-
-Notes on the contract:
-
-- Every input `task_id` gets exactly one output row, in input order, even when a
-  task fails.
-- A `task_id` that appears more than once in the input is answered once and
-  every row for it receives that answer (billed work is never repeated). The
-  count of repeats is written to `METRICS_PATH` and logged when JSON logging is
-  on.
-- A missing or `null` prompt, or a non-string prompt, is treated as an empty
-  prompt and routed to cloud.
-
-### Evaluation
-
-#### Run the Development Judge
+## Evaluation
 
 ```bash
-python -m eval.judge                              # deterministic + LLM, 3 runs
+python -m eval.judge                              # hybrid grader, 3 runs
 python -m eval.judge --category math
 python -m eval.judge --answers eval/results_dev.json   # re-judge saved answers
 python -m eval.judge --answers eval/results_dev.json --grader deterministic  # offline
-python -m eval.judge --grader llm --runs 5        # historical all-LLM behavior
+python -m eval.judge --grader llm --runs 5        # historical all-LLM mode
 ```
 
-Grading is deterministic-first. `eval/checks_dev.json` supplies mechanical
-checks (exact labels, sentence/word counts, entity sets, numbers, code
-structure) for 35 of the 40 dev tasks, so only the code categories reach the
-LLM judge by default. `--grader hybrid` (default) uses a deterministic verdict
-when one is available and falls back to the LLM otherwise; `deterministic`
-fails undecided tasks instead of calling out; `llm` reproduces the old
-all-LLM behavior.
+Grading is deterministic-first: `eval/checks_dev.json` supplies mechanical
+checks (labels, sentence/word counts, entity sets, numbers, code structure)
+for 35 of the 40 dev tasks; only undecided tasks reach the LLM judge.
+`--grader hybrid` (default) prefers deterministic verdicts, `deterministic`
+fails undecided tasks, `llm` reproduces the old all-LLM behavior. `--runs N`
+reports per-task verdict flips and accuracy mean/stdev/range to
+`eval/judge_variance.json` and the dashboard. The judge prompt, its failure
+modes, and grader details are documented in [docs/judge.md](docs/judge.md).
 
-`--runs N` (default 3) repeats judging and reports per-task flip counts plus
-per-run accuracy mean, standard deviation, and range. The report is written to
-`eval/judge_variance.json` and embedded in the dashboard alongside the
-per-category accuracy/token table.
-
-The LLM judge uses a Fireworks call (tokens tracked separately from the routed
-agent's score) and defaults to the `minimax` entry in `ALLOWED_MODELS`. Pass
-`--judge-model <id>` to pin a different allowed model.
-
-#### Check Token-Cost Budgets (Offline)
+Offline cost and precision checks:
 
 ```bash
-python -m eval.cost_regression              # compare against recorded budgets
-python -m eval.cost_regression --update     # intentionally re-record budgets
+python -m eval.cost_regression              # compare token budgets (offline)
+python -m eval.spec_precision               # specialist precision on synthetic data
+python -m eval.bench_local                  # local-lane benchmark
 ```
 
-The harness replays the dev set through the real routing code for three lane
-configurations (`cloud-only`, `specialists`, `hybrid`) with a simulated cloud
-client. It estimates prompt tokens as `ceil(characters / 4)` and adds a fixed
-per-category completion baseline, so it catches prompt growth and lost
-zero-token lanes without depending on provider billing. Recorded budgets live
-in `eval/token_budgets.json` and are enforced by
-`tests/test_token_budget.py`; re-record only when a cost change is intentional.
+`eval/cost_regression` replays the dev set through real routing code for
+`cloud-only`/`specialists`/`hybrid` configs with a simulated cloud client;
+budgets live in `eval/token_budgets.json` and are enforced by
+`tests/test_token_budget.py`.
 
-#### Measure Specialist Precision (Offline)
+## Configuration
 
-```bash
-python -m eval.spec_precision
-```
-
-This replays validated synthetic datasets through ONNX specialists and reports coverage and precision without making any API calls.
-
-## ⚙️ Configuration
-
-### Environment Variables
+### Environment variables
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `TASKS_PATH` | `/input/tasks.json` | Input batch file path |
-| `RESULTS_PATH` | `/output/results.json` | Output batch file path |
-| `AGENT_WORKERS` | `4` | Thread pool size for parallel processing |
+| `TASKS_PATH` | `/input/tasks.json` | Input batch file |
+| `RESULTS_PATH` | `/output/results.json` | Output batch file (bare filename OK) |
+| `AGENT_WORKERS` | `4` | Thread pool size |
 | `AGENT_DEADLINE` | `480` | Seconds before the agent stops collecting answers |
-| `LOCAL_CUTOFF` | `150` | Minimum seconds required to start local work |
-| `LOCAL_CATEGORIES` | empty | Comma-separated categories allowed to use local model |
-| `LOCAL_MODEL_PATH` | `/app/models/model.gguf` | Path to GGUF model weights |
-| `LOCAL_MIN_TPS` | `0.4` | Global local-inference speed floor (tokens/sec) |
-| `LOCAL_TIME_BUDGET` | `300` | Total seconds allocated for local inference |
-| `LOCAL_THREADS` | `2` | Number of llama.cpp threads |
-| `NER_MODEL_DIR` | `/app/models/ner` | Directory for ONNX NER model |
-| `SST2_MODEL_DIR` | `/app/models/sst2` | Directory for ONNX sentiment model |
-| `NER_SPECIALIST` | `on` | Enable the ONNX NER specialist (`on`/`off`) |
-| `NER_MIN_CONFIDENCE` | `0.85` | Per-token confidence floor before NER answers |
-| `NER_MIN_MARGIN` | `0.05` | Per-token top-two label margin before NER answers |
-| `NER_COMPLETENESS_GUARD` | `on` | Escalate unless every capitalized span and date is covered |
-| `ROUTER_MIN_CONFIDENCE` | `0.70` | Send lower-confidence routes directly to cloud |
-| `AGENT_DEBUG` | unset | Enable per-call token usage logging |
-| `AGENT_LOG_JSON` | unset | Emit one structured JSON log line per task/cloud call |
-| `AGENT_DRY_RUN` | unset | Same as `--dry-run`: route and report without calling the cloud |
-| `METRICS_PATH` | unset | Write a per-run metrics JSON snapshot (tokens by category, lane counts, escalations, empty answers) |
-| `CLOUD_TASK_BUDGET` | `75` | Hard per-task cloud time budget in seconds |
-| `CLOUD_BACKOFF_BASE` | `0.5` | Base delay in seconds for transient-error retries |
-| `CLOUD_BACKOFF_CAP` | `8.0` | Maximum backoff delay per retry |
+| `LOCAL_CUTOFF` | `150` | Min seconds remaining to start local work |
+| `LOCAL_CATEGORIES` | empty | Comma-separated categories allowed on local model |
+| `LOCAL_MODEL_PATH` | `/app/models/model.gguf` | GGUF weights path |
+| `LOCAL_MIN_TPS` | `0.4` | Global local speed floor (tok/s) |
+| `LOCAL_TIME_BUDGET` | `300` | Total seconds for local inference |
+| `LOCAL_THREADS` | `2` | llama.cpp threads |
+| `NER_MODEL_DIR` | `/app/models/ner` | ONNX NER model directory |
+| `SST2_MODEL_DIR` | `/app/models/sst2` | ONNX sentiment model directory |
+| `NER_SPECIALIST` | `on` | Enable the NER specialist (`on`/`off`) |
+| `NER_MIN_CONFIDENCE` | `0.85` | Per-token confidence floor for NER answers |
+| `NER_MIN_MARGIN` | `0.05` | Per-token top-two label margin for NER |
+| `NER_COMPLETENESS_GUARD` | `on` | Escalate unless every capitalized span/date is covered |
+| `ROUTER_MIN_CONFIDENCE` | `0.70` | Below this, route straight to cloud |
+| `CLOUD_TASK_BUDGET` | `75` | Per-task cloud time budget (s) |
+| `CLOUD_BACKOFF_BASE` | `0.5` | Transient-retry base delay (s) |
+| `CLOUD_BACKOFF_CAP` | `8.0` | Max backoff delay per retry (s) |
+| `FIREWORKS_API_KEY` / `FIREWORKS_BASE_URL` / `ALLOWED_MODELS` | — | Required cloud credentials |
+| `AGENT_DEBUG` | unset | Human-readable per-call token logs |
+| `AGENT_LOG_JSON` | unset | One JSON event per task/cloud call |
+| `AGENT_DRY_RUN` | unset | Same as `--dry-run` |
+| `METRICS_PATH` | unset | Write per-run metrics JSON snapshot |
 
 ### Observability
 
 Both outputs are off by default so a graded run stays quiet.
 
-**Structured logs** — `AGENT_LOG_JSON=1` prints one JSON object per event:
+`AGENT_LOG_JSON=1` emits one JSON object per event (`task`, `cloud_call`,
+`cloud_retry`, `cloud_budget_exceeded`, `task_abandoned`,
+`duplicate_task_ids`, `dry_run`, `run_summary`):
 
 ```json
 {"ts": 1730000000.12, "level": "info", "event": "task", "task_id": "practice-02",
@@ -330,207 +261,102 @@ Both outputs are off by default so a graded run stays quiet.
  "elapsed_seconds": 12.4, "tokens": 0, "empty_answer": false}
 ```
 
-Event types are `task`, `cloud_call`, `cloud_retry`, `cloud_budget_exceeded`,
-`task_abandoned`, `duplicate_task_ids`, `dry_run`, and `run_summary`.
-`AGENT_DEBUG=1` still prints the human-readable per-call token lines.
+`METRICS_PATH=metrics.json` writes a post-run snapshot: task/lane/category
+counts, escalations, empty answers, low-confidence routes, per-category token
+deltas, and cloud call stats. Lane counts always sum to `tasks`; exact billed
+tokens are under `cloud.tokens` (per-category deltas can overlap slightly
+under concurrent workers).
 
-**Per-run metrics** — `METRICS_PATH=metrics.json` writes a snapshot after the
-results file:
+### Tuning for your host
 
-```json
-{
-  "tasks": 40,
-  "lanes": {"cloud": 22, "specialist": 14, "local": 3, "escalated": 1},
-  "categories": {"factual": 12, "sentiment": 14, "math": 9, "ner": 5},
-  "escalations": {"escalated": 1},
-  "empty_answers": 0,
-  "low_confidence_routes": 4,
-  "duplicates": {"repeated_task_ids": 0, "skipped_rows": 0},
-  "missing_prompts": 0,
-  "tokens": {"total": 4210, "by_category": {"factual": 3100, "math": 1110}, "per_task": 105.25},
-  "cloud": {"calls": 22, "tokens": 4210, "retries": 1, "empty_responses": 0,
-            "budget_exceeded": 0, "tokens_by_category": {"factual": 3100, "math": 1110}},
-  "elapsed_seconds": 91.3
-}
-```
+- **Fast host** — add categories to `LOCAL_CATEGORIES`; local engages only
+  where the measured TPS clears the per-category bar.
+- **Slow host** — leave `LOCAL_CATEGORIES` empty (cloud-only) rather than
+  lowering `LOCAL_MIN_TPS` below what can finish inside the deadline.
+- **Deadline pressure** — lower `AGENT_DEADLINE`/`CLOUD_TASK_BUDGET`;
+  unfinished tasks still get `""` rows.
 
-Lane counts always sum to `tasks`; `tokens.by_category` uses per-task deltas, so
-with concurrent workers it can overlap slightly — the exact billed figure is
-`cloud.tokens`.
+See [docs/troubleshooting.md](docs/troubleshooting.md) for missing-model and
+slow-host diagnostics.
 
-### Fine-Tuning Performance
-
-Adjust these parameters based on your hardware and workload:
-
-- **Fast hosts**: Increase `LOCAL_CATEGORIES` and `LOCAL_MIN_TPS` to use local model more
-- **Slow hosts**: Decrease `LOCAL_MIN_TPS` or leave `LOCAL_CATEGORIES` empty to rely on cloud
-- **Cost-sensitive**: Lower `AGENT_DEADLINE` to prevent expensive long-running cloud calls
-- **Accuracy-critical**: Increase `LOCAL_CUTOFF` to give local specialists more time
-
-## Repository Structure
-
-```text
-agent/            Runtime components: router, prompts, cloud client, local model, specialists, PAL, logging/metrics
-eval/             Development tools: deterministic judge, cost regression, dashboard, local benchmark, specialist precision harness, versioned router paraphrase suites
-finetune/         Fine-tuning pipeline: synthetic data generator, LoRA training, GGUF conversion, notebooks
-models/           ONNX configs and tokenizers (weights are gitignored)
-testio/           Local input batches for practice, development, and stress testing
-tests/            Router, PAL fuzz, cloud, local calibration, deadline, and secret-scan tests
-scripts/          Secret-scanning hook shared by pre-commit and CI
-requirements.lock Fully pinned, hash-verified cloud image dependencies
-Dockerfile*       Various Docker images: cloud-only, local, phase-2, and versioned hybrid builds
-SCORES.md         Historical evaluation log with token/accuracy findings
-TODO.md           Roadmap, next steps, and known limitations
-```
-
-## 🐳 Docker
-
-### Cloud-Only Image
-
-The default `Dockerfile` creates a minimal cloud-only image containing only the core runtime:
+## Docker
 
 ```bash
-docker build -t querylane .
-# The image runs as uid/gid 10001. Make the bind-mounted output directory
-# writable by that uid (or use a named volume) before starting the container.
-mkdir -p testio/output && chmod 0777 testio/output
+docker build -t querylane .          # cloud-only, pinned digest + hashed lockfile
+docker build -f Dockerfile.local -t querylane-local .   # hybrid w/ specialists+GGUF
+```
+
+```bash
 docker run --rm \
-  -e FIREWORKS_API_KEY \
-  -e FIREWORKS_BASE_URL \
-  -e ALLOWED_MODELS \
-  -v "$PWD/testio/input:/input:ro" \
-  -v "$PWD/testio/output:/output" \
+  -e FIREWORKS_API_KEY -e FIREWORKS_BASE_URL -e ALLOWED_MODELS \
+  -v "$PWD/testio/input:/input:ro" -v "$PWD/testio/output:/output" \
   querylane
 ```
 
-The base image is pinned by manifest digest and runtime dependencies are
-installed from `requirements.lock` with `--require-hashes`; hybrid images use
-`requirements-hybrid.lock`. This makes image rebuilds reproducible.
+Notes:
 
-### Multi-Architecture Builds (amd64 / arm64)
+- Images run as uid/gid 10001 — make bind-mounted `/output` writable
+  (`chmod 0777 testio/output` or a named volume).
+- `--dry-run` works inside the container with no credentials.
+- Multi-arch (amd64/arm64) builds for the cloud image:
+  `docker buildx build --platform linux/amd64,linux/arm64 -t querylane .`
+- ⚠️ The llama-cpp CPU wheel index only ships x86_64 wheels — build hybrid
+  images for ARM64 with `--platform linux/amd64` (emulation) or compile from
+  source (see `Dockerfile.local`).
+- Versioned hybrid Dockerfiles: `Dockerfile.phase2`, `.v10`, `.v13`, `.v14`,
+  `.v15`. Dependencies install from `requirements.lock` /
+  `requirements-hybrid.lock` with `--require-hashes`.
 
-The cloud-only image supports both `linux/amd64` and `linux/arm64` (e.g. AWS Graviton, Apple Silicon) architectures out of the box. Build multi-arch images with `docker buildx`:
+## Repository layout
 
-```bash
-docker buildx build --platform linux/amd64,linux/arm64 -t querylane:latest .
+```text
+agent/       runtime: router, prompts, cloud, local, specialists, pal, obs
+eval/        judge, deterministic checks, cost regression, dashboards, benches
+finetune/    synthetic data gen, LoRA training, GGUF conversion, notebooks
+models/      model configs/tokenizers (weights git-ignored)
+testio/      local input batches for dev and stress testing
+tests/       router, PAL fuzz, cloud, local calibration, deadline, secret scan
+docs/        architecture, judge, troubleshooting, category guide, security
+scripts/     model downloader + shared secret scanner
+Dockerfile*  cloud-only + versioned hybrid images
+SCORES.md    historical eval log — token/accuracy trade-off history
+TODO.md      roadmap, known limitations, next steps
 ```
 
-#### ⚠️ CPU Wheel Caveat for `llama-cpp-python` (Hybrid / Local Images)
+## Design principles
 
-The prebuilt CPU wheel index configured in `Dockerfile.local` and `Dockerfile.phase2` (`https://abetlen.github.io/llama-cpp-python/whl/cpu`) hosts precompiled wheels **only for x86_64 (`linux/amd64`)**.
+- **Terse system prompts** — every system token is billed on every call
+- **No content-based retries** — transient errors and model fallback only; a
+  second attempt costs tokens
+- **Precision over coverage** — a specialist answering 38% at 100% precision
+  beats one answering 80% at 90%
+- **Escalation is cheap** — ~100 cloud tokens beats an accuracy-gate miss
+- **Calibrate, then decide** — local lanes engage per category from measured
+  tok/s, not host assumptions
+- **Safety by default** — specialists escalate rather than guess
 
-If building hybrid or local images on an **ARM64** machine (e.g., Apple Silicon M1/M2/M3 or AWS Graviton):
-1. **Emulation (Recommended)**: Build using `--platform linux/amd64`:
-   ```bash
-   docker build --platform linux/amd64 -f Dockerfile.local -t querylane-local .
-   ```
-2. **Native Source Build**: Alternatively, install `build-essential` and `cmake` inside the container and remove the `--only-binary=llama-cpp-python` flag to compile `llama-cpp-python` directly against ARM64 NEON instructions.
+## Status & limitations
 
-### Automated Model Artifact Downloads
+Research/competition codebase, not a hosted service. Score history lives in
+[SCORES.md](SCORES.md); roadmap and known gaps in [TODO.md](TODO.md).
 
-Rather than manually downloading and copying weights, QueryLane includes a download script with cryptographic SHA-256 verification:
-
-```bash
-# Download ONNX specialist models (NER and SST-2 sentiment)
-python scripts/download_models.py onnx
-
-# Download local GGUF models as well
-python scripts/download_models.py all
-
-# Verify integrity of downloaded weights
-python scripts/download_models.py --verify-only
-```
-
-### Hybrid Images
-
-Versioned Dockerfiles bundle ONNX specialists and/or GGUF weights for local inference:
-
-- `Dockerfile.phase2` - Phase 2 hybrid build
-- `Dockerfile.v10` - Version 10 hybrid build
-- `Dockerfile.v13` - Version 13 hybrid build
-- `Dockerfile.v14` - Version 14 hybrid build
-- `Dockerfile.v15` - Version 15 hybrid build
-
-### Interactive Lane Explainer & Web Demo
-
-Inspect routing, confidence gates, and predicted execution lanes for any query:
-
-```bash
-# Terminal CLI
-querylane-explain "Identify the founders: Steve Jobs and Steve Wozniak started Apple."
-
-# Alternatively via agent module
-python -m agent.explain "Calculate 25 * 40 - 150"
-
-# Interactive Web Interface (Zero dependencies)
-python -m agent.web_demo --port 8000
-```
-
-### Container Flags and Limits
-
-The image entrypoint is `python -m agent.main`, so container arguments are agent
-flags — add `--dry-run` to a `docker run` to route a batch inside the image
-without calling the API (no credentials needed). The run writes
-`/output/results.json`; set `METRICS_PATH=/output/metrics.json` to keep the
-metrics snapshot next to it. Both files must be writable by uid 10001.
-
-### Local Development Image
-
-For local development with specialist support:
-
-```bash
-docker build -f Dockerfile.local -t querylane-local .
-mkdir -p testio/output && chmod 0777 testio/output
-docker run --rm \
-  -e FIREWORKS_API_KEY \
-  -e FIREWORKS_BASE_URL \
-  -e ALLOWED_MODELS \
-  -v "$PWD/testio/input:/input:ro" \
-  -v "$PWD/testio/output:/output" \
-  querylane-local
-```
-
-## Design Principles
-
-QueryLane's design prioritizes cost efficiency without sacrificing accuracy:
-
-- **Terse system prompts** - Every system token is billed on every call, so prompts are kept minimal
-- **No content-based retries** - Only transient-error retries and model fallback; a second attempt costs tokens
-- **Precision over coverage** - A specialist that answers 38% of tasks at 100% precision is better than one that answers 80% at 90% precision
-- **Escalation is cheap** - Paying ~100 tokens for a cloud answer beats an accuracy-gate miss
-- **Calibrate, then decide** - Local inference is enabled per category from a measured tokens-per-second rate, not from assumptions about the host
-- **Safety by default** - Specialists escalate rather than guess when uncertain
-
-## Project Status
-
-QueryLane is a research/competition codebase, not a hosted service. The historical score log, including the token/accuracy trade-offs that shaped the router, is available in [`SCORES.md`](SCORES.md). Known gaps and planned improvements are documented in [`TODO.md`](TODO.md).
-
-### Current Limitations
-
-- The sentiment specialist has no neutral class; neutral reviews are escalated by design
-- The ONNX NER specialist is enabled by default but remains precision-gated: uncertain tokens, MISC spans without a cue, and incomplete entity coverage escalate to cloud
-- Local generative inference is only useful on hosts above per-category speed thresholds
-- The development judge is deterministic for 35/40 tasks; the code categories still use an LLM, so run `--runs` before trusting a small accuracy delta
-- `train_all.jsonl` and `train_round2.jsonl` are the same rows in different order; `train_dedup.jsonl` (2,775 rows) is the canonical deduplicated training file, and its two invalid rows are documented in [`finetune/README.md`](finetune/README.md)
+- Sentiment specialist has no neutral class — neutrals escalate by design
+- NER specialist is precision-gated: uncertain tokens, uncovered spans, and
+  incomplete coverage escalate to cloud
+- Local inference only pays off above per-category TPS thresholds
+- Dev judge is deterministic for 35/40 tasks; code categories still use an
+  LLM — run `--runs` before trusting small accuracy deltas
+- `train_all.jsonl`/`train_round2.jsonl` overlap; `train_dedup.jsonl` is the
+  canonical deduplicated file (see `finetune/README.md`)
 
 ## Contributing
 
-Contributions are welcome! QueryLane is actively being improved. Key areas for contribution include:
-
-- Improving specialist precision and coverage
-- Adding new task categories
-- Enhancing the routing algorithm
-- Expanding the test suite
-- Documentation improvements
-
-See [`TODO.md`](TODO.md) for a detailed roadmap of planned features and known issues.
-
-## Additional Resources
-
-- [`SCORES.md`](SCORES.md) - Historical evaluation results and performance metrics
-- [`TODO.md`](TODO.md) - Roadmap, known issues, and planned improvements
-- [`finetune/POD_INSTRUCTIONS.md`](finetune/POD_INSTRUCTIONS.md) - Model training and conversion guide
+Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for workflow and
+coding conventions, and [TODO.md](TODO.md) for the roadmap. Good first areas:
+specialist precision/coverage, new categories (see
+[docs/adding-a-category.md](docs/adding-a-category.md)), routing improvements,
+and test coverage.
 
 ## License
 
-Released under the [MIT License](LICENSE).
+[MIT](LICENSE)
